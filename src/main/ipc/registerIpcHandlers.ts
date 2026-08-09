@@ -1,5 +1,7 @@
-import { app, dialog, ipcMain } from 'electron';
-import { mkdir, mkdtemp, readFile, readdir, rename, rm, stat, statfs } from 'node:fs/promises';
+import { app, dialog, ipcMain, net, protocol } from 'electron';
+import { mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, statfs } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
+import ffmpegStaticPath from 'ffmpeg-static';
 import path from 'node:path';
 import sharp from 'sharp';
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
@@ -20,6 +22,23 @@ const validateJpeg = async (file: string) => {
   if (metadata.format !== 'jpeg' || !metadata.width || !metadata.height)
     throw new Error('Camera returned an invalid JPEG');
 };
+const validateMp4 = async (file: string) => {
+  const details = await stat(file);
+  if (details.size < 64) throw new Error('Session video is empty');
+  const handle = await open(file, 'r');
+  try {
+    const header = Buffer.alloc(32);
+    await handle.read(header, 0, header.length, 0);
+    if (header.subarray(4, 8).toString('ascii') !== 'ftyp') throw new Error('Session video is not a valid MP4');
+  } finally {
+    await handle.close();
+  }
+};
+
+const bundledFfmpegPath = () => {
+  if (!ffmpegStaticPath) throw new Error('The bundled FFmpeg encoder is unavailable');
+  return app.isPackaged ? ffmpegStaticPath.replace('app.asar', 'app.asar.unpacked') : ffmpegStaticPath;
+};
 
 export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = new Logger()) {
   const events = new EventStorage();
@@ -29,6 +48,24 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
   const previewRoot = path.join(app.getPath('temp'), 'camera-booth-preview');
   const layoutAssetRoot = path.join(app.getPath('userData'), 'layout-assets');
   let camera: CameraAdapter | null = null;
+
+  protocol.handle('camera-booth-video', async (request) => {
+    try {
+      const url = new URL(request.url);
+      if (url.host !== 'session') return new Response('Not found', { status: 404 });
+      const id = decodeURIComponent(url.pathname.replace(/^\//, ''));
+      const config = await events.load();
+      const metadata = await sessions.get(config, id);
+      const expected = path.resolve(sessions.videoPath(config, id));
+      if (metadata.videoStatus !== 'ready' || !metadata.videoPath || path.resolve(metadata.videoPath) !== expected) {
+        return new Response('Not found', { status: 404 });
+      }
+      await validateMp4(expected);
+      return net.fetch(pathToFileURL(expected).toString(), { headers: request.headers });
+    } catch {
+      return new Response('Not found', { status: 404 });
+    }
+  });
 
   const railImagePath = (config: LayoutConfig) => {
     if (!config.railImageAssetId) return undefined;
@@ -157,6 +194,15 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
       await sessions.update(config, sessionId, (metadata) => {
         metadata.originalPaths[index] = destination;
         metadata.status = `original-${index + 1}-saved`;
+        if (metadata.videoStatus === 'recording' && metadata.videoStartedAt) {
+          const rawOffset = Date.parse(photo.capturedAt) - Date.parse(metadata.videoStartedAt);
+          metadata.videoMarkers = metadata.videoMarkers.filter((marker) => marker.index !== index);
+          metadata.videoMarkers.push({
+            index,
+            capturedAt: photo.capturedAt,
+            offsetMs: Number.isFinite(rawOffset) ? Math.max(0, rawOffset) : 0,
+          });
+        }
         return metadata;
       });
       logger.info('Original captured', { sessionId, index: index + 1, flashFired: true });
@@ -169,6 +215,91 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
   channel('session:get', async (id: string) => {
     const config = await events.load();
     return sessions.view(config, await sessions.get(config, id));
+  });
+  channel('session:startVideo', async (id: string) => {
+    const config = await events.load();
+    let metadata = await sessions.get(config, id);
+    if (!metadata.videoEnabled || metadata.test || metadata.videoStatus === 'ready') {
+      return sessions.view(config, metadata);
+    }
+    const partial = sessions.temporaryVideoPath(config, id);
+    const output = sessions.videoPath(config, id);
+    try {
+      await rm(partial, { force: true });
+      await rm(output, { force: true });
+      const result = await (await getCamera()).startRecording(bundledFfmpegPath(), partial);
+      metadata = await sessions.update(config, id, (current) => {
+        current.videoStatus = 'recording';
+        current.videoStartedAt = result.startedAt;
+        current.videoEndedAt = undefined;
+        current.videoPath = undefined;
+        current.videoFrameCount = 0;
+        current.videoDroppedFrames = 0;
+        current.videoMarkers = [];
+        return current;
+      });
+      logger.info('Session video started', { sessionId: id, startedAt: result.startedAt });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      metadata = await sessions.update(config, id, (current) => {
+        current.videoStatus = 'failed';
+        current.errors.push({ at: new Date().toISOString(), step: 'video-start', message });
+        return current;
+      });
+      logger.warn('Session video could not start; photos will continue', { sessionId: id, message });
+    }
+    return sessions.view(config, metadata);
+  });
+  channel('session:stopVideo', async (id: string) => {
+    const config = await events.load();
+    let metadata = await sessions.get(config, id);
+    if (metadata.videoStatus !== 'recording') return sessions.view(config, metadata);
+    metadata = await sessions.update(config, id, (current) => {
+      current.videoStatus = 'processing';
+      return current;
+    });
+    const partial = sessions.temporaryVideoPath(config, id);
+    const output = sessions.videoPath(config, id);
+    try {
+      const result = await (await getCamera()).stopRecording();
+      await validateMp4(partial);
+      await rm(output, { force: true });
+      await rename(partial, output);
+      metadata = await sessions.update(config, id, (current) => {
+        current.videoStatus = 'ready';
+        current.videoPath = output;
+        current.videoStartedAt = result.startedAt;
+        current.videoEndedAt = result.endedAt;
+        current.videoFrameCount = result.frameCount;
+        current.videoDroppedFrames = result.droppedFrames;
+        return current;
+      });
+      logger.info('Session video finalized', {
+        sessionId: id,
+        frames: result.frameCount,
+        droppedFrames: result.droppedFrames,
+        measuredFramesPerSecond: Number(result.framesPerSecond.toFixed(1)),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const interrupted = sessions.interruptedVideoPath(config, id);
+      try {
+        if ((await stat(partial)).size > 0) {
+          await rm(interrupted, { force: true });
+          await rename(partial, interrupted);
+        }
+      } catch {
+        // The encoder may not have produced a recoverable partial file.
+      }
+      metadata = await sessions.update(config, id, (current) => {
+        current.videoStatus = 'failed';
+        current.videoEndedAt = new Date().toISOString();
+        current.errors.push({ at: new Date().toISOString(), step: 'video-stop', message });
+        return current;
+      });
+      logger.warn('Session video could not be finalized; photos were preserved', { sessionId: id, message });
+    }
+    return sessions.view(config, metadata);
   });
   channel('session:render', async (id: string) => {
     const config = await events.load();
@@ -344,6 +475,36 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
       });
       const folder = path.join(events.eventFolder(config), 'diagnostics');
       await mkdir(folder, { recursive: true });
+      if (config.capture.sessionVideoEnabled) {
+        const videoPartial = path.join(folder, 'test-session-video.partial.mp4');
+        const videoOutput = path.join(folder, 'test-session-video.mp4');
+        let videoStarted = false;
+        try {
+          await rm(videoPartial, { force: true });
+          await rm(videoOutput, { force: true });
+          await adapter.startRecording(bundledFfmpegPath(), videoPartial);
+          videoStarted = true;
+          await new Promise((resolve) => setTimeout(resolve, 1_500));
+          const video = await adapter.stopRecording();
+          videoStarted = false;
+          await validateMp4(videoPartial);
+          await rename(videoPartial, videoOutput);
+          results.push({
+            label: 'Session video',
+            status: video.frameCount >= 10 ? 'pass' : 'warning',
+            detail: `${video.frameCount} frames encoded at ${video.framesPerSecond.toFixed(1)} measured fps; ${video.droppedFrames} dropped.`,
+          });
+        } catch (error) {
+          if (videoStarted) await adapter.stopRecording().catch(() => undefined);
+          results.push({
+            label: 'Session video',
+            status: 'warning',
+            detail: `Video is unavailable, but photos remain ready: ${error instanceof Error ? error.message : String(error)}`,
+          });
+        }
+      } else {
+        results.push({ label: 'Session video', status: 'pass', detail: 'Disabled in Capture settings.' });
+      }
       diagnosticPhoto = path.join(folder, 'test-capture.jpg');
       await adapter.capture(diagnosticPhoto);
       await validateJpeg(diagnosticPhoto);
@@ -433,6 +594,7 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
   channel('system:logs', () => logger.readRecent());
 
   return async () => {
+    protocol.unhandle('camera-booth-video');
     if (camera) await camera.disconnect();
   };
 }

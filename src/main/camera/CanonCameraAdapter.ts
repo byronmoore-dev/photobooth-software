@@ -3,7 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { CameraAdapter } from './CameraAdapter';
+import type { CameraAdapter, VideoRecordingResult, VideoRecordingStart } from './CameraAdapter';
 import type { CameraStatus, CapturedPhoto } from '../../shared/types';
 
 interface BridgeMessage {
@@ -187,6 +187,16 @@ export class CanonCameraAdapter implements CameraAdapter {
       dataUrl: `data:image/jpeg;base64,${buffer.toString('base64')}`,
       capturedAt: result.capturedAt,
     };
+  }
+  async startRecording(ffmpegPath: string, destinationPath: string) {
+    return this.command<VideoRecordingStart>(
+      'startRecording',
+      { ffmpegPath: path.resolve(ffmpegPath), path: path.resolve(destinationPath) },
+      15000,
+    );
+  }
+  async stopRecording() {
+    return this.command<VideoRecordingResult>('stopRecording', {}, 40000);
   }
   async getStatus() {
     if (!this.child) return this.lastStatus;

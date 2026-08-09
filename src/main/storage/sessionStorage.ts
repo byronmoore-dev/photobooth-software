@@ -1,4 +1,4 @@
-import { access, mkdir, readdir, readFile, rm } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { EventConfig, RecoverySummary, SessionMetadata, SessionSummary, SessionView } from '../../shared/types';
 import { normalizeSessionMetadata } from '../../shared/defaults';
@@ -29,7 +29,7 @@ export class SessionStorage {
     const now = new Date().toISOString();
     const id = `${test ? 'test-' : ''}${now.replace(/[:.]/g, '-').slice(0, 19)}-${crypto.randomUUID().slice(0, 6)}`;
     const metadata: SessionMetadata = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       id,
       eventId: config.id,
       createdAt: now,
@@ -39,6 +39,9 @@ export class SessionStorage {
       uploadEnabled: config.sharing.enabled && !test,
       uploadStatus: config.sharing.enabled && !test ? 'pending' : 'disabled',
       uploadedFiles: [],
+      videoEnabled: config.capture.sessionVideoEnabled && !test,
+      videoStatus: config.capture.sessionVideoEnabled && !test ? 'pending' : 'disabled',
+      videoMarkers: [],
       errors: [],
       test,
     };
@@ -61,6 +64,18 @@ export class SessionStorage {
 
   temporaryFinalPath(config: EventConfig, id: string) {
     return `${this.finalPath(config, id)}.part`;
+  }
+
+  videoPath(config: EventConfig, id: string) {
+    return path.join(this.folder(config, id), 'session-video.mp4');
+  }
+
+  temporaryVideoPath(config: EventConfig, id: string) {
+    return path.join(this.folder(config, id), 'session-video.partial.mp4');
+  }
+
+  interruptedVideoPath(config: EventConfig, id: string) {
+    return path.join(this.folder(config, id), 'session-video.interrupted.mp4');
   }
 
   async save(config: EventConfig, input: SessionMetadata) {
@@ -107,7 +122,12 @@ export class SessionStorage {
       ...metadata,
       originalDataUrls: originals.filter((item): item is string => Boolean(item)),
       finalDataUrl: await toData(metadata.finalPath),
+      videoUrl: metadata.videoStatus === 'ready' && metadata.videoPath ? this.videoUrl(metadata.id) : undefined,
     };
+  }
+
+  videoUrl(id: string) {
+    return `camera-booth-video://session/${encodeURIComponent(this.assertId(id))}`;
   }
 
   async summary(metadata: SessionMetadata): Promise<SessionSummary> {
@@ -119,7 +139,11 @@ export class SessionStorage {
         finalDataUrl = undefined;
       }
     }
-    return { ...metadata, finalDataUrl };
+    return {
+      ...metadata,
+      finalDataUrl,
+      videoUrl: metadata.videoStatus === 'ready' && metadata.videoPath ? this.videoUrl(metadata.id) : undefined,
+    };
   }
 
   async all(config: EventConfig): Promise<SessionMetadata[]> {
@@ -162,6 +186,41 @@ export class SessionStorage {
         ...[0, 1, 2].map((index) => rm(this.temporaryOriginalPath(config, metadata.id, index), { force: true })),
         rm(this.temporaryFinalPath(config, metadata.id), { force: true }),
       ]);
+      if (['recording', 'processing'].includes(metadata.videoStatus)) {
+        const partial = this.temporaryVideoPath(config, metadata.id);
+        const interrupted = this.interruptedVideoPath(config, metadata.id);
+        try {
+          if ((await stat(partial)).size > 0) {
+            await rm(interrupted, { force: true });
+            await rename(partial, interrupted);
+          } else {
+            await rm(partial, { force: true });
+          }
+        } catch {
+          // No partial recording was recoverable.
+        }
+        metadata.videoStatus = 'interrupted';
+        metadata.videoEndedAt = new Date().toISOString();
+        metadata.errors.push({
+          at: new Date().toISOString(),
+          step: 'video-recovery',
+          message: 'Session video was interrupted. The photo session was preserved.',
+        });
+        changed = true;
+      } else if (metadata.videoStatus === 'ready') {
+        try {
+          if (!metadata.videoPath || (await stat(metadata.videoPath)).size === 0) throw new Error('Missing video');
+        } catch {
+          metadata.videoStatus = 'failed';
+          metadata.videoPath = undefined;
+          metadata.errors.push({
+            at: new Date().toISOString(),
+            step: 'video-recovery',
+            message: 'The session video file was missing or empty. The photo session was preserved.',
+          });
+          changed = true;
+        }
+      }
       if (metadata.uploadStatus === 'uploading') {
         metadata.uploadStatus = 'pending';
         changed = true;

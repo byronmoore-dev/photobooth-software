@@ -35,7 +35,7 @@ interface SideRailThreeStackLayoutConfig extends LayoutConfigBase {
 export type LayoutConfig = SideRailThreeStackLayoutConfig;
 
 export interface EventConfig {
-  schemaVersion: 6;
+  schemaVersion: 7;
   id: string;
   createdAt: string;
   eventDate: string;
@@ -46,6 +46,7 @@ export interface EventConfig {
     countdownSeconds: number;
     previewMs: number;
     mirrorLiveView: boolean;
+    sessionVideoEnabled: boolean;
     camera: 'canon';
   };
   layout: LayoutConfig;
@@ -104,8 +105,16 @@ interface SessionError {
   message: string;
 }
 
+type SessionVideoStatus = 'disabled' | 'pending' | 'recording' | 'processing' | 'ready' | 'failed' | 'interrupted';
+
+interface SessionVideoMarker {
+  index: number;
+  capturedAt: string;
+  offsetMs: number;
+}
+
 export interface SessionMetadata {
-  schemaVersion: 2;
+  schemaVersion: 3;
   id: string;
   eventId: string;
   createdAt: string;
@@ -120,6 +129,14 @@ export interface SessionMetadata {
   uploadedFiles?: string[];
   remoteSessionId?: string;
   qrUrl?: string;
+  videoEnabled: boolean;
+  videoStatus: SessionVideoStatus;
+  videoPath?: string;
+  videoStartedAt?: string;
+  videoEndedAt?: string;
+  videoFrameCount?: number;
+  videoDroppedFrames?: number;
+  videoMarkers: SessionVideoMarker[];
   errors: SessionError[];
   test?: boolean;
 }
@@ -127,10 +144,12 @@ export interface SessionMetadata {
 export interface SessionView extends SessionMetadata {
   originalDataUrls: string[];
   finalDataUrl?: string;
+  videoUrl?: string;
 }
 
 export interface SessionSummary extends SessionMetadata {
   finalDataUrl?: string;
+  videoUrl?: string;
 }
 
 export interface RecoverySummary {
@@ -172,6 +191,8 @@ export interface BoothApi {
   session: {
     create(test?: boolean): Promise<SessionView>;
     get(id: string): Promise<SessionView>;
+    startVideo(id: string): Promise<SessionView>;
+    stopVideo(id: string): Promise<SessionView>;
     render(id: string): Promise<SessionView>;
     recent(): Promise<SessionSummary[]>;
     recover(): Promise<RecoverySummary>;

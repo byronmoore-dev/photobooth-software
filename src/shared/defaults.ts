@@ -28,7 +28,7 @@ const validDateInput = (value: unknown) => {
 };
 
 export const createDefaultConfig = (baseFolder: string): EventConfig => ({
-  schemaVersion: 6,
+  schemaVersion: 7,
   id: '',
   createdAt: '',
   eventDate: '',
@@ -39,6 +39,7 @@ export const createDefaultConfig = (baseFolder: string): EventConfig => ({
     countdownSeconds: 8,
     previewMs: 2000,
     mirrorLiveView: true,
+    sessionVideoEnabled: false,
     camera: 'canon',
   },
   layout: {
@@ -119,7 +120,7 @@ export const normalizeEventConfig = (value: unknown, baseFolder: string): EventC
     : storedCreatedAt;
   if (!('detail' in layoutSource) && description) layout.detail = description.slice(0, 180);
   return {
-    schemaVersion: 6,
+    schemaVersion: 7,
     id,
     createdAt,
     eventDate: storedEventDate,
@@ -136,6 +137,7 @@ export const normalizeEventConfig = (value: unknown, baseFolder: string): EventC
           ? defaults.capture.previewMs
           : Math.round(number(capture.previewMs, defaults.capture.previewMs, 250, 10000)),
       mirrorLiveView: bool(capture.mirrorLiveView, defaults.capture.mirrorLiveView),
+      sessionVideoEnabled: bool(capture.sessionVideoEnabled, defaults.capture.sessionVideoEnabled),
       camera: 'canon',
     },
     layout,
@@ -164,8 +166,10 @@ export const normalizeEventConfig = (value: unknown, baseFolder: string): EventC
 export const normalizeSessionMetadata = (value: unknown): SessionMetadata => {
   const source = record(value);
   const createdAt = text(source.createdAt, new Date().toISOString());
+  const videoStatuses = new Set(['disabled', 'pending', 'recording', 'processing', 'ready', 'failed', 'interrupted']);
+  const videoStatus = text(source.videoStatus);
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     id: text(source.id),
     eventId: text(source.eventId),
     createdAt,
@@ -184,6 +188,35 @@ export const normalizeSessionMetadata = (value: unknown): SessionMetadata => {
       : [],
     remoteSessionId: text(source.remoteSessionId) || undefined,
     qrUrl: text(source.qrUrl) || undefined,
+    videoEnabled: bool(source.videoEnabled, false),
+    videoStatus: videoStatuses.has(videoStatus)
+      ? (videoStatus as SessionMetadata['videoStatus'])
+      : bool(source.videoEnabled, false)
+        ? 'pending'
+        : 'disabled',
+    videoPath: text(source.videoPath) || undefined,
+    videoStartedAt: text(source.videoStartedAt) || undefined,
+    videoEndedAt: text(source.videoEndedAt) || undefined,
+    videoFrameCount:
+      typeof source.videoFrameCount === 'number' && Number.isFinite(source.videoFrameCount)
+        ? Math.max(0, Math.floor(source.videoFrameCount))
+        : undefined,
+    videoDroppedFrames:
+      typeof source.videoDroppedFrames === 'number' && Number.isFinite(source.videoDroppedFrames)
+        ? Math.max(0, Math.floor(source.videoDroppedFrames))
+        : undefined,
+    videoMarkers: Array.isArray(source.videoMarkers)
+      ? source.videoMarkers.flatMap((item) => {
+          const marker = record(item);
+          const index = typeof marker.index === 'number' ? Math.floor(marker.index) : -1;
+          const capturedAt = text(marker.capturedAt);
+          const offsetMs =
+            typeof marker.offsetMs === 'number' && Number.isFinite(marker.offsetMs)
+              ? Math.max(0, Math.round(marker.offsetMs))
+              : -1;
+          return index >= 0 && capturedAt && offsetMs >= 0 ? [{ index, capturedAt, offsetMs }] : [];
+        })
+      : [],
     errors: Array.isArray(source.errors)
       ? (source.errors.filter((item) => item && typeof item === 'object') as SessionMetadata['errors'])
       : [],

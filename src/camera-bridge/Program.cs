@@ -24,6 +24,7 @@ internal sealed class CameraHost : IDisposable
     private readonly object outputLock = new();
     private readonly Canon.EdsObjectEventHandler objectHandler;
     private readonly Canon.EdsStateEventHandler stateHandler;
+    private readonly LiveViewVideoRecorder videoRecorder = new();
     private IntPtr camera;
     private bool sdkLoaded;
     private bool connected;
@@ -36,7 +37,9 @@ internal sealed class CameraHost : IDisposable
     private string pendingCaptureId;
     private string pendingCapturePath;
     private DateTime pendingCaptureStarted;
+    private DateTime pendingCaptureShutterAt;
     private DateTime nextFrameAt = DateTime.MinValue;
+    private DateTime nextUiFrameAt = DateTime.MinValue;
     private int consecutiveFrameErrors;
 
     public CameraHost()
@@ -92,6 +95,8 @@ internal sealed class CameraHost : IDisposable
                     case "stopLiveView": StopLiveView(); Respond(command.Id, Status()); break;
                     case "status": Respond(command.Id, Status()); break;
                     case "capture": BeginCapture(command); break;
+                    case "startRecording": StartRecording(command); break;
+                    case "stopRecording": StopRecording(command); break;
                     case "shutdown": Respond(command.Id, new { stopped = true }); running = false; break;
                     default: throw new InvalidOperationException($"Unknown command: {command.Command}");
                 }
@@ -139,6 +144,7 @@ internal sealed class CameraHost : IDisposable
 
     private void Disconnect()
     {
+        if (videoRecorder.IsRecording) { try { videoRecorder.Stop(); } catch { } }
         if (camera != IntPtr.Zero)
         {
             try { Canon.EdsSendCommand(camera, Canon.CameraCommand_PressShutterButton, (int)Canon.EdsShutterButton.CameraCommand_ShutterButton_OFF); } catch { }
@@ -158,7 +164,7 @@ internal sealed class CameraHost : IDisposable
         TrySetUInt(Canon.PropID_Evf_AFMode, (uint)Canon.EdsEvfAFMode.Evf_AFMode_LiveMulti);
         Check(Canon.EdsGetPropertyData(camera, Canon.PropID_Evf_OutputDevice, 0, out uint device), "read live view output");
         Check(Canon.EdsSetPropertyData(camera, Canon.PropID_Evf_OutputDevice, 0, sizeof(uint), device | Canon.EvfOutputDevice_PC), "start PC live view");
-        liveView = true; consecutiveFrameErrors = 0; nextFrameAt = DateTime.MinValue;
+        liveView = true; consecutiveFrameErrors = 0; nextFrameAt = DateTime.MinValue; nextUiFrameAt = DateTime.MinValue;
     }
 
     private void StopLiveView()
@@ -172,7 +178,8 @@ internal sealed class CameraHost : IDisposable
     private void ProcessLiveView()
     {
         if (!connected || !liveView || DateTime.UtcNow < nextFrameAt) return;
-        nextFrameAt = DateTime.UtcNow.AddMilliseconds(75);
+        var now = DateTime.UtcNow;
+        nextFrameAt = now.AddMilliseconds(videoRecorder.IsRecording ? 40 : 75);
         IntPtr stream = IntPtr.Zero, image = IntPtr.Zero;
         try
         {
@@ -185,7 +192,12 @@ internal sealed class CameraHost : IDisposable
             Check(Canon.EdsGetPointer(stream, out var pointer), "read live view pointer");
             if (length == 0 || length > 8 * 1024 * 1024) return;
             var bytes = new byte[(int)length]; Marshal.Copy(pointer, bytes, 0, bytes.Length);
-            Write(new { type = "frame", jpeg = Convert.ToBase64String(bytes), at = DateTime.UtcNow });
+            videoRecorder.OfferFrame(bytes);
+            if (now >= nextUiFrameAt)
+            {
+                nextUiFrameAt = now.AddMilliseconds(75);
+                Write(new { type = "frame", jpeg = Convert.ToBase64String(bytes), at = now });
+            }
             consecutiveFrameErrors = 0;
         }
         catch (Exception ex)
@@ -207,6 +219,7 @@ internal sealed class CameraHost : IDisposable
         {
             Check(Canon.EdsSendCommand(camera, Canon.CameraCommand_PressShutterButton, (int)Canon.EdsShutterButton.CameraCommand_ShutterButton_Halfway), "start autofocus");
             Thread.Sleep(FocusHoldMilliseconds);
+            pendingCaptureShutterAt = DateTime.UtcNow;
             var err = Canon.EdsSendCommand(camera, Canon.CameraCommand_PressShutterButton, (int)Canon.EdsShutterButton.CameraCommand_ShutterButton_Completely);
             var releaseError = Canon.EdsSendCommand(camera, Canon.CameraCommand_PressShutterButton, (int)Canon.EdsShutterButton.CameraCommand_ShutterButton_OFF);
             if (err == Canon.EDS_ERR_OK) err = releaseError;
@@ -218,6 +231,31 @@ internal sealed class CameraHost : IDisposable
             ClearPendingCapture();
             throw;
         }
+    }
+
+    private void StartRecording(CommandEnvelope command)
+    {
+        RequireConnected();
+        if (!liveView) throw new InvalidOperationException("Start Canon live view before session video");
+        if (!command.Args.TryGetProperty("ffmpegPath", out var encoderElement)) throw new InvalidOperationException("FFmpeg path is required");
+        if (!command.Args.TryGetProperty("path", out var pathElement)) throw new InvalidOperationException("Video destination is required");
+        var startedAt = videoRecorder.Start(encoderElement.GetString(), pathElement.GetString(), 20);
+        nextFrameAt = DateTime.MinValue;
+        Respond(command.Id, new { startedAt });
+    }
+
+    private void StopRecording(CommandEnvelope command)
+    {
+        var result = videoRecorder.Stop();
+        Respond(command.Id, new
+        {
+            startedAt = result.StartedAt,
+            endedAt = result.EndedAt,
+            frameCount = result.FrameCount,
+            droppedFrames = result.DroppedFrames,
+            fileSize = result.FileSize,
+            framesPerSecond = result.FramesPerSecond,
+        });
     }
 
     private void ApplyAutomaticPhotoSettings()
@@ -280,7 +318,7 @@ internal sealed class CameraHost : IDisposable
                     );
                 }
                 var id = pendingCaptureId; var path = pendingCapturePath; ClearPendingCapture();
-                Respond(id, new { path, capturedAt = DateTime.UtcNow, flashFired = true });
+                Respond(id, new { path, capturedAt = pendingCaptureShutterAt, flashFired = true });
             }
             catch (Exception ex) { var id = pendingCaptureId; ClearPendingCapture(); RespondError(id, ex.Message); }
             finally { Canon.EdsRelease(item); }
@@ -336,6 +374,7 @@ internal sealed class CameraHost : IDisposable
         detected = connected,
         connected,
         liveView,
+        recording = videoRecorder.IsRecording,
         productName,
         firmware,
         exposureMode,
@@ -353,7 +392,7 @@ internal sealed class CameraHost : IDisposable
     private void Respond(string id, object result) => Write(new { type = "response", id, ok = true, result });
     private void RespondError(string id, string error) { if (!string.IsNullOrEmpty(id)) Write(new { type = "response", id, ok = false, error }); }
     private void Write(object value) { lock (outputLock) { Console.Out.WriteLine(JsonSerializer.Serialize(value)); Console.Out.Flush(); } }
-    public void Dispose() { Disconnect(); GC.KeepAlive(objectHandler); GC.KeepAlive(stateHandler); }
+    public void Dispose() { Disconnect(); videoRecorder.Dispose(); GC.KeepAlive(objectHandler); GC.KeepAlive(stateHandler); }
 }
 
 internal static class Program

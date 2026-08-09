@@ -130,6 +130,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
   const [checks, setChecks] = useState<DiagnosticsResult[]>([]);
   const [recent, setRecent] = useState<SessionSummary[]>([]);
   const [selectedSession, setSelectedSession] = useState<SessionSummary | null>(null);
+  const [sessionMedia, setSessionMedia] = useState<'print' | 'video'>('print');
   const [reprintCopies, setReprintCopies] = useState(1);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [logLevel, setLogLevel] = useState<'all' | LogEntry['level']>('all');
@@ -716,20 +717,36 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                       key={item.id}
                       onClick={() => {
                         setReprintCopies(draft.printer.defaultCopies);
+                        setSessionMedia('print');
                         setSelectedSession(item);
                       }}
                     >
-                      <img
-                        className="aspect-[2/3] w-full rounded-[1.5rem] bg-stone-200 object-cover shadow-[0_16px_45px_rgba(63,55,46,0.1)] transition-shadow group-hover:shadow-[0_22px_55px_rgba(63,55,46,0.16)]"
-                        src={item.finalDataUrl}
-                        alt={`Photo strip from ${sessionDate.format(new Date(item.createdAt))}`}
-                        width={1200}
-                        height={1800}
-                        loading="lazy"
-                      />
-                      <time className="block truncate px-1 pt-3 text-sm font-semibold" dateTime={item.createdAt}>
-                        {sessionDate.format(new Date(item.createdAt))}
-                      </time>
+                      <span className="relative block">
+                        <img
+                          className="aspect-[2/3] w-full rounded-[1.5rem] bg-stone-200 object-cover shadow-[0_16px_45px_rgba(63,55,46,0.1)] transition-shadow group-hover:shadow-[0_22px_55px_rgba(63,55,46,0.16)]"
+                          src={item.finalDataUrl}
+                          alt={`Photo strip from ${sessionDate.format(new Date(item.createdAt))}`}
+                          width={1200}
+                          height={1800}
+                          loading="lazy"
+                        />
+                        {item.videoUrl ? (
+                          <span
+                            className="absolute right-3 bottom-3 grid size-11 place-items-center rounded-full bg-stone-950/80 text-white shadow-lg backdrop-blur-sm"
+                            aria-label="Video available"
+                          >
+                            <svg className="ml-0.5 size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                              <path d="M8 5.7v12.6a1 1 0 0 0 1.55.84l9.1-6.3a1 1 0 0 0 0-1.68l-9.1-6.3A1 1 0 0 0 8 5.7Z" />
+                            </svg>
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="flex items-center justify-between gap-3 px-1 pt-3">
+                        <time className="block truncate text-sm font-semibold" dateTime={item.createdAt}>
+                          {sessionDate.format(new Date(item.createdAt))}
+                        </time>
+                        {item.videoUrl ? <span className="text-xs font-medium text-stone-500">Video</span> : null}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -787,6 +804,12 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                   onChange={(mirrorLiveView) => patch('capture', { ...draft.capture, mirrorLiveView })}
                   label="Mirror the live view"
                   description="The saved photo is never mirrored"
+                />
+                <Toggle
+                  checked={draft.capture.sessionVideoEnabled}
+                  onChange={(sessionVideoEnabled) => patch('capture', { ...draft.capture, sessionVideoEnabled })}
+                  label="Record each session"
+                  description="Saves a silent video from Start through the final photo"
                 />
               </div>
             </section>
@@ -1327,14 +1350,27 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
             aria-labelledby="session-dialog-title"
             onKeyDown={trapDialogFocus}
           >
-            <div className="grid min-h-0 place-items-center rounded-[2rem] bg-stone-200 p-6">
-              <img
-                className="max-h-[70vh] max-w-full rounded-2xl object-contain shadow-xl"
-                src={selectedSession.finalDataUrl}
-                alt={`Photo strip from ${sessionDate.format(new Date(selectedSession.createdAt))}`}
-                width={1200}
-                height={1800}
-              />
+            <div className="grid min-h-0 place-items-center overflow-hidden rounded-[2rem] bg-stone-200 p-6">
+              {sessionMedia === 'video' && selectedSession.videoUrl ? (
+                <video
+                  className="max-h-[70vh] max-w-full rounded-2xl bg-black shadow-xl"
+                  src={selectedSession.videoUrl}
+                  poster={selectedSession.finalDataUrl}
+                  controls
+                  autoPlay
+                  playsInline
+                  preload="metadata"
+                  aria-label={`Session video from ${sessionDate.format(new Date(selectedSession.createdAt))}`}
+                />
+              ) : (
+                <img
+                  className="max-h-[70vh] max-w-full rounded-2xl object-contain shadow-xl"
+                  src={selectedSession.finalDataUrl}
+                  alt={`Photo strip from ${sessionDate.format(new Date(selectedSession.createdAt))}`}
+                  width={1200}
+                  height={1800}
+                />
+              )}
             </div>
             <div className="flex min-w-0 flex-col">
               <button
@@ -1357,11 +1393,31 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
               </button>
               <div className="my-auto py-8">
                 <h3 id="session-dialog-title" className="text-3xl font-semibold tracking-[-0.045em] text-balance">
-                  Reprint Session
+                  Session
                 </h3>
                 <time className="mt-2 block text-sm text-stone-500" dateTime={selectedSession.createdAt}>
                   {sessionDate.format(new Date(selectedSession.createdAt))}
                 </time>
+                {selectedSession.videoUrl ? (
+                  <div className="mt-7 grid grid-cols-2 rounded-2xl bg-stone-200/80 p-1" aria-label="Session media">
+                    <button
+                      className={`min-h-11 rounded-xl text-sm font-semibold transition-colors ${sessionMedia === 'print' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
+                      type="button"
+                      aria-pressed={sessionMedia === 'print'}
+                      onClick={() => setSessionMedia('print')}
+                    >
+                      Print
+                    </button>
+                    <button
+                      className={`min-h-11 rounded-xl text-sm font-semibold transition-colors ${sessionMedia === 'video' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
+                      type="button"
+                      aria-pressed={sessionMedia === 'video'}
+                      onClick={() => setSessionMedia('video')}
+                    >
+                      Video
+                    </button>
+                  </div>
+                ) : null}
                 <div className="mt-8">
                   <PrintQuantity value={reprintCopies} max={draft.printer.maxCopies} onChange={setReprintCopies} />
                 </div>

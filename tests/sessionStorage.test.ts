@@ -104,4 +104,44 @@ describe('session storage and recovery', () => {
     expect(summary.finalDataUrl).toMatch(/^data:image\/jpeg;base64,/);
     expect(summary).not.toHaveProperty('originalDataUrls');
   });
+
+  it('enables session video only for opted-in production sessions', async () => {
+    const { config, storage } = await fixture();
+    config.capture.sessionVideoEnabled = true;
+
+    await expect(storage.create(config)).resolves.toMatchObject({ videoEnabled: true, videoStatus: 'pending' });
+    await expect(storage.create(config, true)).resolves.toMatchObject({ videoEnabled: false, videoStatus: 'disabled' });
+  });
+
+  it('quarantines an interrupted partial video while preserving session metadata', async () => {
+    const { config, storage } = await fixture();
+    config.capture.sessionVideoEnabled = true;
+    const session = await storage.create(config);
+    session.videoStatus = 'recording';
+    session.videoStartedAt = new Date().toISOString();
+    await writeFile(storage.temporaryVideoPath(config, session.id), Buffer.alloc(128, 1));
+    await storage.save(config, session);
+
+    await storage.recover(config, validateJpeg, async () => {
+      throw new Error('should not render');
+    });
+
+    const recovered = await storage.get(config, session.id);
+    expect(recovered.videoStatus).toBe('interrupted');
+    expect(recovered.errors).toEqual(expect.arrayContaining([expect.objectContaining({ step: 'video-recovery' })]));
+    await expect(access(storage.interruptedVideoPath(config, session.id))).resolves.toBeUndefined();
+    await expect(access(storage.temporaryVideoPath(config, session.id))).rejects.toThrow();
+  });
+
+  it('exposes a stream URL only for an existing ready video', async () => {
+    const { config, storage } = await fixture();
+    const session = await storage.create(config);
+    session.videoEnabled = true;
+    session.videoStatus = 'ready';
+    session.videoPath = storage.videoPath(config, session.id);
+    await writeFile(session.videoPath, Buffer.alloc(128, 2));
+
+    const summary = await storage.summary(session);
+    expect(summary.videoUrl).toBe(`camera-booth-video://session/${session.id}`);
+  });
 });

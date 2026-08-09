@@ -9,6 +9,7 @@ import {
   localDateInputValue,
   normalizeEventConfig,
   normalizeLayoutConfig,
+  normalizeSessionMetadata,
   requireEventId,
 } from '../src/shared/defaults';
 
@@ -18,7 +19,7 @@ describe('event configuration', () => {
     expect(defaults.id).toBe('');
     expect(defaults.description).toBe('');
     expect(defaults.eventDate).toBe('');
-    expect(defaults.capture).toMatchObject({ countdownSeconds: 8, previewMs: 2000 });
+    expect(defaults.capture).toMatchObject({ countdownSeconds: 8, previewMs: 2000, sessionVideoEnabled: false });
     expect(defaults.capture).not.toHaveProperty('transitionMs');
   });
 
@@ -54,7 +55,7 @@ describe('event configuration', () => {
       },
       'C:\\Events',
     );
-    expect(migrated.schemaVersion).toBe(6);
+    expect(migrated.schemaVersion).toBe(7);
     expect(migrated.createdAt).toBe('');
     expect(migrated.eventDate).toBe('');
     expect(migrated.layout).toMatchObject({
@@ -97,6 +98,23 @@ describe('event configuration', () => {
     );
 
     expect(migrated.capture).toMatchObject({ countdownSeconds: 6, previewMs: 1500, mirrorLiveView: false });
+    expect(migrated.capture.sessionVideoEnabled).toBe(false);
+  });
+
+  it('migrates video metadata safely and rejects malformed shutter markers', () => {
+    const migrated = normalizeSessionMetadata({
+      id: 'session-1',
+      videoEnabled: true,
+      videoStatus: 'recording',
+      videoMarkers: [
+        { index: 0, capturedAt: '2026-08-09T12:00:00.000Z', offsetMs: 1200 },
+        { index: -1, capturedAt: '', offsetMs: -5 },
+      ],
+    });
+
+    expect(migrated.schemaVersion).toBe(3);
+    expect(migrated.videoStatus).toBe('recording');
+    expect(migrated.videoMarkers).toEqual([{ index: 0, capturedAt: '2026-08-09T12:00:00.000Z', offsetMs: 1200 }]);
   });
 
   it('requires complete setup and limits it to the configured local day', () => {

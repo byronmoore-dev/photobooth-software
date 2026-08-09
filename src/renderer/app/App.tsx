@@ -129,8 +129,11 @@ export function App() {
     acceptLiveFrames.current = true;
     setError('');
     setPhotos([]);
+    let current: SessionView | null = null;
     try {
-      const current = await window.booth.session.create(false);
+      current = await window.booth.session.create(false);
+      setSession(current);
+      current = await window.booth.session.startVideo(current.id);
       setSession(current);
       for (let index = 0; index < 3; index++) {
         let photo: CapturedPhoto | null = null;
@@ -170,11 +173,9 @@ export function App() {
         setFrame(photo.dataUrl);
         setState('PHOTO_PREVIEW');
         if (index === 2) {
-          const [rendered] = await Promise.all([
-            window.booth.session.render(current.id),
-            wait(config.capture.previewMs),
-          ]);
-          setSession(rendered);
+          const video = window.booth.session.stopVideo(current.id);
+          await Promise.all([window.booth.session.render(current.id), video, wait(config.capture.previewMs)]);
+          setSession(await window.booth.session.get(current.id));
           setState('RESULT');
           return;
         }
@@ -187,6 +188,7 @@ export function App() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
       setState('ERROR');
+      if (current) await window.booth.session.stopVideo(current.id).catch(() => undefined);
       await window.booth.session.recover().catch(() => undefined);
     } finally {
       running.current = false;

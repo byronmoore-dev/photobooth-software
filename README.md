@@ -4,7 +4,7 @@ Production Windows photo booth for attendant-operated three-photo sessions. Came
 
 ## Install
 
-Run `dist\Camera-Booth-Setup-0.15.1.exe`. The installer includes the x64 .NET camera bridge and Canon runtime DLLs, so an event operator does not install the SDK separately.
+Run `dist\Camera-Booth-Setup-0.16.0.exe`. The installer includes the x64 .NET camera bridge, Canon runtime DLLs, and the session-video encoder, so an event operator does not install either SDK separately.
 
 Before opening Camera Booth:
 
@@ -23,6 +23,8 @@ In guest mode, attendant Settings has no visible icon. Tap the invisible 96-pixe
 
 Finished strips appear as a visual grid under **Settings → Sessions**. Select a strip, choose the number of copies, and reprint without finding files in Windows Explorer.
 
+Silent session video is opt-in under **Settings → Capture → Record each session**. When enabled, the app records the Canon live view from Start through the third verified photo, including countdowns and flash retries. Full-resolution flash JPEG capture remains unchanged and always takes priority. The encoder consumes a bounded frame queue, so slow encoding drops video frames instead of delaying the camera. Each shutter time is stored in `session.json`; the resulting H.264 MP4 keeps the camera live-view aspect ratio and is playable from the Sessions screen. Video errors never stop photo capture or printing.
+
 The initial **Editorial Side Rail** design produces a true 4 × 6 inch portrait print at 300 DPI (1200 × 1800 pixels). Its 1-inch information rail occupies the left side. Three edge-to-edge 3 × 2 inch photographs stack vertically on the right. Each design preset supplies its geometry, typography, color, quality, and default headline. Attendants select a complete design instead of configuring those technical values. An optional 300 × 1800 PNG can replace the built-in rail artwork while the preset continues to position the event text.
 
 ## Reliability and recovery
@@ -34,6 +36,7 @@ Configuration and session metadata are written through same-folder temporary fil
 - rebuilds a missing final strip when all three originals survived;
 - resets interrupted uploads to pending and retries them;
 - validates captured and rendered JPEGs before committing their paths.
+- quarantines interrupted partial session videos and leaves every photo recoverable.
 
 Operational logs are stored under the app's Windows user-data folder and rotate at 5 MB. View the latest structured entries, filter by severity, and refresh them directly from **Settings → Logs**.
 
@@ -69,11 +72,13 @@ The default base folder is `Documents\Camera Booth Events`. Each event uses this
   diagnostics/
     test-capture.jpg
     test-layout.jpg
+    test-session-video.mp4
   sessions/{session-id}/
     original-01.jpg
     original-02.jpg
     original-03.jpg
     final.jpg
+    session-video.mp4
     session.json
 ```
 
@@ -86,6 +91,7 @@ Cloud sharing is disabled by default and the booth continues to capture and prin
 ## Event release checklist
 
 - Run the diagnostic check with the actual T6i, USB cable, booth computer, and printer.
+- If session video is enabled, confirm Diagnostics reports the measured live-view frame rate and dropped-frame count.
 - Make a physical test print and calibrate borderless, media, quality, and color settings in the printer driver.
 - Use Canon ACK-E18 AC power for event-length operation; the T6i is not powered over USB.
 - Run an event-length soak test and disable Windows sleep and USB selective suspend.

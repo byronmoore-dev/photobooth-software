@@ -1,4 +1,4 @@
-import { app, BrowserWindow, powerSaveBlocker, session } from 'electron';
+import { app, BrowserWindow, powerSaveBlocker, protocol, session } from 'electron';
 import path from 'node:path';
 import { registerIpcHandlers } from './ipc/registerIpcHandlers';
 import { Logger } from './logging/logger';
@@ -6,6 +6,13 @@ import { Logger } from './logging/logger';
 let mainWindow: BrowserWindow | null = null;
 let blocker: number | null = null;
 let cleanup: (() => Promise<void>) | null = null;
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'camera-booth-video',
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+  },
+]);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

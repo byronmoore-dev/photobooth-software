@@ -30,6 +30,8 @@ const api: BoothApi = {
   session: {
     create: (test) => invoke('session:create', test),
     get: (id) => invoke('session:get', id),
+    startVideo: (id) => invoke('session:startVideo', id),
+    stopVideo: (id) => invoke('session:stopVideo', id),
     render: (id) => invoke('session:render', id),
     recent: () => invoke('session:recent'),
     recover: () => invoke('session:recover'),
