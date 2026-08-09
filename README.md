@@ -1,0 +1,93 @@
+# Camera Booth
+
+Production Windows photo booth for attendant-operated three-photo sessions. Camera Booth is a native Electron application that uses Canon's official EDSDK over USB for live view, autofocus, and print-ready JPEG capture.
+
+## Install
+
+Run `dist\Camera-Booth-Setup-0.15.1.exe`. The installer includes the x64 .NET camera bridge and Canon runtime DLLs, so an event operator does not install the SDK separately.
+
+Before opening Camera Booth:
+
+1. Connect the Canon EOS Rebel T6i directly over USB and turn it on.
+2. Set the mode dial to **P**, set the lens switch to **AF**, raise the built-in flash, set flash firing to **On**, and disable the camera's Wi-Fi/NFC connection.
+3. Close Canon EOS Utility and any other application that may have opened the camera.
+4. Connect the photo printer and install its Windows driver.
+
+The T6i's installed firmware 1.0.0 can remain as-is. Camera Booth does not update firmware. When the selected camera mode permits it, the app requests Auto White Balance, Auto ISO, zero exposure compensation, single-shot drive, Auto Picture Style, and sRGB. It captures Canon Small 1 Fine JPEGs (2976 × 1984, about 5.9 MP), which are appropriate for a 5 × 7 print without storing unnecessary full-resolution originals.
+
+The app begins Canon's autofocus-and-capture operation 500 ms before the last countdown tick finishes. The bridge holds autofocus for 450 ms, then sends the shutter request just before visual zero to compensate for the T6i's physical shutter and pre-flash latency. Every downloaded JPEG is checked for Canon's flash-fired EXIF bit; a missed flash is rejected and the attendant can retry only that photo without losing the session. The captured photo appears for 2 seconds by default; change this under **Settings → Capture → Photo preview**.
+
+The app always opens on the public booth screen. If there is no event for today, that screen shows **Event setup required** with an **Open Settings** button; Settings can always be closed again without creating an event. In **Settings → Set Up**, choose **New Event**. Event ID, event date, and description always begin completely blank in this separate creation view and are not saved until **Create Event** is chosen. Once created, the event is shown read-only and every session remains associated with it. The Set Up page shows a current event only when its date matches the computer’s current local date; otherwise it returns to **No Event Today** while the older event remains safely stored. Choose the printer, run **Diagnostics → Run Check**, then make a physical test print from the Layout screen. Kiosk mode is enabled by default and can be changed under Display settings.
+
+In guest mode, attendant Settings has no visible icon. Tap the invisible 96-pixel target in the upper-right corner, or press and hold it for 1.5 seconds, to open Settings.
+
+Finished strips appear as a visual grid under **Settings → Sessions**. Select a strip, choose the number of copies, and reprint without finding files in Windows Explorer.
+
+The initial **Editorial Side Rail** design produces a true 4 × 6 inch portrait print at 300 DPI (1200 × 1800 pixels). Its 1-inch information rail occupies the left side. Three edge-to-edge 3 × 2 inch photographs stack vertically on the right. Each design preset supplies its geometry, typography, color, quality, and default headline. Attendants select a complete design instead of configuring those technical values. An optional 300 × 1800 PNG can replace the built-in rail artwork while the preset continues to position the event text.
+
+## Reliability and recovery
+
+Configuration and session metadata are written through same-folder temporary files, flushed before replacement, and retain a last-known-good backup. Session metadata updates are serialized so print and upload updates cannot overwrite one another. On startup, the app:
+
+- recovers metadata from backups when necessary;
+- preserves interrupted sessions and their valid originals;
+- rebuilds a missing final strip when all three originals survived;
+- resets interrupted uploads to pending and retries them;
+- validates captured and rendered JPEGs before committing their paths.
+
+Operational logs are stored under the app's Windows user-data folder and rotate at 5 MB. View the latest structured entries, filter by severity, and refresh them directly from **Settings → Logs**.
+
+## Development
+
+Requirements are current Node.js and npm releases plus a supported .NET SDK on Windows x64. Canon's EDSDK distribution must be present under `vendor\canon-edsdk`; its proprietary files are intentionally ignored by Git.
+
+```powershell
+npm install
+npm run dev
+```
+
+Run all release checks:
+
+```powershell
+npm run typecheck
+npm test
+npm run check:dead-code
+npm audit
+npm outdated
+npm run dist
+```
+
+The installer is written to `dist\`.
+
+## Stored files
+
+The default base folder is `Documents\Camera Booth Events`. Each event uses this structure:
+
+```text
+{event-id}/
+  event.json
+  diagnostics/
+    test-capture.jpg
+    test-layout.jpg
+  sessions/{session-id}/
+    original-01.jpg
+    original-02.jpg
+    original-03.jpg
+    final.jpg
+    session.json
+```
+
+Printing uses Electron's Windows printing API and the installed printer driver. A successful result means Windows accepted the job; paper, ink, and hardware completion remain the printer driver's responsibility.
+
+## Optional cloud contract
+
+Cloud sharing is disabled by default and the booth continues to capture and print offline. When sharing is enabled, the configured service receives the event and session identifiers and returns short-lived presigned upload URLs plus a controlled gallery URL. Permanent AWS credentials are never stored in the desktop app. Successfully uploaded file paths are committed individually, making retries idempotent after a restart.
+
+## Event release checklist
+
+- Run the diagnostic check with the actual T6i, USB cable, booth computer, and printer.
+- Make a physical test print and calibrate borderless, media, quality, and color settings in the printer driver.
+- Use Canon ACK-E18 AC power for event-length operation; the T6i is not powered over USB.
+- Run an event-length soak test and disable Windows sleep and USB selective suspend.
+- Add an Authenticode code-signing certificate before broad distribution.
+- Preserve Canon's EDSDK license terms.
