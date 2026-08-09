@@ -1,0 +1,54 @@
+import { contextBridge, ipcRenderer } from 'electron';
+import type { BoothApi } from '../shared/types';
+
+const invoke = <T>(channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args) as Promise<T>;
+const api: BoothApi = {
+  event: {
+    load: () => invoke('event:load'),
+    save: (c) => invoke('event:save', c),
+    create: (c) => invoke('event:create', c),
+    chooseFolder: () => invoke('event:chooseFolder'),
+    openFolder: () => invoke('event:openFolder'),
+  },
+  camera: {
+    connect: () => invoke('camera:connect'),
+    disconnect: () => invoke('camera:disconnect'),
+    startLiveView: () => invoke('camera:startLiveView'),
+    capture: (id, index) => invoke('camera:capture', id, index),
+    status: () => invoke('camera:status'),
+    onFrame: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, frame: string) => callback(frame);
+      ipcRenderer.on('camera:frame', listener);
+      return () => ipcRenderer.removeListener('camera:frame', listener);
+    },
+    onStatus: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: Parameters<typeof callback>[0]) => callback(status);
+      ipcRenderer.on('camera:statusChanged', listener);
+      return () => ipcRenderer.removeListener('camera:statusChanged', listener);
+    },
+  },
+  session: {
+    create: (test) => invoke('session:create', test),
+    get: (id) => invoke('session:get', id),
+    render: (id) => invoke('session:render', id),
+    recent: () => invoke('session:recent'),
+    recover: () => invoke('session:recover'),
+  },
+  printer: {
+    list: () => invoke('printer:list'),
+    print: (id, copies) => invoke('printer:print', id, copies),
+    testPrint: (path) => invoke('printer:testPrint', path),
+  },
+  layout: {
+    preview: (config) => invoke('layout:preview', config),
+    chooseRailImage: () => invoke('layout:chooseRailImage'),
+  },
+  diagnostics: { run: () => invoke('diagnostics:run') },
+  upload: { retryPending: () => invoke('upload:retryPending') },
+  system: {
+    getVersion: () => invoke('system:getVersion'),
+    setKiosk: (enabled) => invoke('system:setKiosk', enabled),
+    logs: () => invoke('system:logs'),
+  },
+};
+contextBridge.exposeInMainWorld('booth', api);

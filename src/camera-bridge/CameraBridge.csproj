@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>CanonCameraBridge</AssemblyName>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <!-- The official Canon EDSDK C# wrapper uses legacy marshalling declarations. -->
+    <NoWarn>$(NoWarn);CS0618;CS9125</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\vendor\canon-edsdk\sample\CSharp\CameraControl\CameraControl\EDSDK.cs" Link="Canon\EDSDK.cs" />
+    <Content Include="..\..\vendor\canon-edsdk\EDSDK_64\Dll\EDSDK.dll" Link="EDSDK.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="..\..\vendor\canon-edsdk\EDSDK_64\Dll\EdsImage.dll" Link="EdsImage.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="..\..\vendor\canon-edsdk\readme.txt" Link="canon-edsdk-readme.txt" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+  </ItemGroup>
+</Project>

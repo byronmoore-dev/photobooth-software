@@ -1,0 +1,214 @@
+import { access, mkdir, readdir, readFile, rm } from 'node:fs/promises';
+import path from 'node:path';
+import type { EventConfig, RecoverySummary, SessionMetadata, SessionSummary, SessionView } from '../../shared/types';
+import { normalizeSessionMetadata } from '../../shared/defaults';
+import { atomicWriteJson, readJsonWithBackup } from './atomicFile';
+import { EventStorage } from './eventStorage';
+
+const SESSION_ID = /^(?:test-)?[A-Za-z0-9-]{12,80}$/;
+
+export class SessionStorage {
+  private readonly locks = new Map<string, Promise<void>>();
+
+  constructor(private readonly events: Pick<EventStorage, 'eventFolder'>) {}
+
+  private assertId(id: string) {
+    if (!SESSION_ID.test(id)) throw new Error('Invalid session ID');
+    return id;
+  }
+
+  private folder(config: EventConfig, id: string) {
+    return path.join(this.events.eventFolder(config), 'sessions', this.assertId(id));
+  }
+
+  private metadataPath(config: EventConfig, id: string) {
+    return path.join(this.folder(config, id), 'session.json');
+  }
+
+  async create(config: EventConfig, test = false): Promise<SessionMetadata> {
+    const now = new Date().toISOString();
+    const id = `${test ? 'test-' : ''}${now.replace(/[:.]/g, '-').slice(0, 19)}-${crypto.randomUUID().slice(0, 6)}`;
+    const metadata: SessionMetadata = {
+      schemaVersion: 2,
+      id,
+      eventId: config.id,
+      createdAt: now,
+      updatedAt: now,
+      status: 'created',
+      originalPaths: [],
+      uploadEnabled: config.sharing.enabled && !test,
+      uploadStatus: config.sharing.enabled && !test ? 'pending' : 'disabled',
+      uploadedFiles: [],
+      errors: [],
+      test,
+    };
+    await mkdir(this.folder(config, id), { recursive: true });
+    await this.save(config, metadata);
+    return metadata;
+  }
+
+  originalPath(config: EventConfig, id: string, index: number) {
+    return path.join(this.folder(config, id), `original-${String(index + 1).padStart(2, '0')}.jpg`);
+  }
+
+  temporaryOriginalPath(config: EventConfig, id: string, index: number) {
+    return `${this.originalPath(config, id, index)}.part`;
+  }
+
+  finalPath(config: EventConfig, id: string) {
+    return path.join(this.folder(config, id), 'final.jpg');
+  }
+
+  temporaryFinalPath(config: EventConfig, id: string) {
+    return `${this.finalPath(config, id)}.part`;
+  }
+
+  async save(config: EventConfig, input: SessionMetadata) {
+    const metadata = normalizeSessionMetadata({ ...input, updatedAt: new Date().toISOString() });
+    await mkdir(this.folder(config, metadata.id), { recursive: true });
+    await atomicWriteJson(this.metadataPath(config, metadata.id), metadata);
+    return metadata;
+  }
+
+  async get(config: EventConfig, id: string) {
+    return normalizeSessionMetadata(await readJsonWithBackup<unknown>(this.metadataPath(config, id)));
+  }
+
+  async update(config: EventConfig, id: string, change: (current: SessionMetadata) => SessionMetadata | void) {
+    this.assertId(id);
+    const previous = this.locks.get(id) ?? Promise.resolve();
+    let updated: SessionMetadata | undefined;
+    const operation = previous
+      .catch(() => undefined)
+      .then(async () => {
+        const current = await this.get(config, id);
+        updated = change(current) ?? current;
+        updated = await this.save(config, updated);
+      });
+    const queued = operation.finally(() => {
+      if (this.locks.get(id) === queued) this.locks.delete(id);
+    });
+    this.locks.set(id, queued);
+    await operation;
+    return updated!;
+  }
+
+  async view(config: EventConfig, metadata: SessionMetadata): Promise<SessionView> {
+    const toData = async (file?: string) => {
+      if (!file) return undefined;
+      try {
+        return `data:image/jpeg;base64,${(await readFile(file)).toString('base64')}`;
+      } catch {
+        return undefined;
+      }
+    };
+    const originals = await Promise.all(metadata.originalPaths.map(toData));
+    return {
+      ...metadata,
+      originalDataUrls: originals.filter((item): item is string => Boolean(item)),
+      finalDataUrl: await toData(metadata.finalPath),
+    };
+  }
+
+  async summary(metadata: SessionMetadata): Promise<SessionSummary> {
+    let finalDataUrl: string | undefined;
+    if (metadata.finalPath) {
+      try {
+        finalDataUrl = `data:image/jpeg;base64,${(await readFile(metadata.finalPath)).toString('base64')}`;
+      } catch {
+        finalDataUrl = undefined;
+      }
+    }
+    return { ...metadata, finalDataUrl };
+  }
+
+  async all(config: EventConfig): Promise<SessionMetadata[]> {
+    const root = path.join(this.events.eventFolder(config), 'sessions');
+    let names: string[] = [];
+    try {
+      names = await readdir(root);
+    } catch {
+      return [];
+    }
+    const records = await Promise.all(
+      names
+        .filter((name) => SESSION_ID.test(name))
+        .map(async (name) => {
+          try {
+            return await this.get(config, name);
+          } catch {
+            return null;
+          }
+        }),
+    );
+    return records
+      .filter((item): item is SessionMetadata => Boolean(item))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async recent(config: EventConfig) {
+    return (await this.all(config)).slice(0, 30);
+  }
+
+  async recover(
+    config: EventConfig,
+    validateImage: (file: string) => Promise<void>,
+    renderFinal: (metadata: SessionMetadata) => Promise<string>,
+  ): Promise<RecoverySummary> {
+    const summary: RecoverySummary = { recovered: 0, interrupted: 0, pendingUploads: 0 };
+    for (const metadata of await this.all(config)) {
+      let changed = false;
+      await Promise.all([
+        ...[0, 1, 2].map((index) => rm(this.temporaryOriginalPath(config, metadata.id, index), { force: true })),
+        rm(this.temporaryFinalPath(config, metadata.id), { force: true }),
+      ]);
+      if (metadata.uploadStatus === 'uploading') {
+        metadata.uploadStatus = 'pending';
+        changed = true;
+      }
+      if (metadata.uploadEnabled && metadata.uploadStatus !== 'complete') summary.pendingUploads++;
+
+      const validOriginals: string[] = [];
+      for (const file of metadata.originalPaths) {
+        try {
+          await access(file);
+          await validateImage(file);
+          validOriginals.push(file);
+        } catch {
+          // Preserve the metadata record while excluding an invalid file from recovery.
+        }
+      }
+
+      if (validOriginals.length === 3) {
+        let finalValid = false;
+        if (metadata.finalPath) {
+          try {
+            await validateImage(metadata.finalPath);
+            finalValid = true;
+          } catch {
+            finalValid = false;
+          }
+        }
+        if (!finalValid) {
+          metadata.originalPaths = validOriginals;
+          metadata.finalPath = await renderFinal(metadata);
+          metadata.status = 'ready';
+          summary.recovered++;
+          changed = true;
+        }
+      } else if (!['complete', 'print-error', 'interrupted'].includes(metadata.status)) {
+        metadata.status = 'interrupted';
+        metadata.errors.push({
+          at: new Date().toISOString(),
+          step: 'recovery',
+          message: `Session stopped after ${validOriginals.length} of 3 photos. Saved originals were preserved.`,
+        });
+        summary.interrupted++;
+        changed = true;
+      }
+
+      if (changed) await this.save(config, metadata);
+    }
+    return summary;
+  }
+}

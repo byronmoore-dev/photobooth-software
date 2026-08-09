@@ -1,0 +1,116 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Sora Variable', 'Avenir Next', 'Segoe UI', sans-serif;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body {
+    background: #0c0a09;
+    color: #1c1917;
+    font-family: var(--font-sans);
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 3px solid rgb(184 164 133 / 70%);
+    outline-offset: 3px;
+  }
+}
+
+@keyframes countdown-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  10% {
+    opacity: 1;
+    transform: scale(1.015);
+  }
+  100% {
+    opacity: 0.96;
+    transform: scale(0.975);
+  }
+}
+
+@keyframes countdown-ring {
+  0% {
+    opacity: 0.25;
+    stroke-dashoffset: 1;
+  }
+  8% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.9;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes capture-flash {
+  0% {
+    opacity: 1;
+  }
+  62% {
+    opacity: 0.18;
+  }
+  100% {
+    opacity: 0.08;
+  }
+}
+
+@keyframes printing-dot {
+  50% {
+    opacity: 0.2;
+    transform: translateY(-4px);
+  }
+}
+
+.countdown-pop {
+  animation: countdown-pop 0.94s cubic-bezier(0.2, 0.78, 0.2, 1);
+}
+.countdown-ring {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: countdown-ring 0.98s linear forwards;
+}
+.capture-flash {
+  animation: capture-flash 0.36s ease-out forwards;
+}
+.printing-dot {
+  animation: printing-dot 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

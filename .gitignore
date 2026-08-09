@@ -1,0 +1,17 @@
+node_modules/
+dist/
+dist-camera-bridge/
+dist-electron/
+dist-renderer/
+release/
+src/camera-bridge/bin/
+src/camera-bridge/obj/
+tmp/
+smoke-artifacts/
+qa-*.png
+*.log
+.env
+.env.*
+!.env.example
+vendor/canon-edsdk/*
+!vendor/canon-edsdk/README.md
