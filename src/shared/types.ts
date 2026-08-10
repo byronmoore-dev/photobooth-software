@@ -223,6 +223,7 @@ export interface BoothApi {
   system: {
     getVersion(): Promise<string>;
     setKiosk(enabled: boolean): Promise<boolean>;
+    showTouchKeyboard(): Promise<boolean>;
     logs(): Promise<LogEntry[]>;
   };
 }

@@ -51,6 +51,7 @@ const api: BoothApi = {
   system: {
     getVersion: () => invoke('system:getVersion'),
     setKiosk: (enabled) => invoke('system:setKiosk', enabled),
+    showTouchKeyboard: () => invoke('system:showTouchKeyboard'),
     logs: () => invoke('system:logs'),
   },
 };

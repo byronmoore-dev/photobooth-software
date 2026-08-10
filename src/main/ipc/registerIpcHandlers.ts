@@ -14,6 +14,7 @@ import { WindowsPrinterAdapter } from '../printer/WindowsPrinterAdapter';
 import { UploadQueue } from '../cloud/uploadQueue';
 import { Logger } from '../logging/logger';
 import { CURRENT_RECAP_VERSION, generateRecap, RecapQueue } from '../video/recapGenerator';
+import { showWindowsTouchKeyboard } from '../system/touchKeyboard';
 import { clampCopies, eventSetupIssues, isEventActive, normalizeLayoutConfig } from '../../shared/defaults';
 import type { EventConfig, LayoutConfig, SessionMetadata } from '../../shared/types';
 
@@ -702,6 +703,7 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
     window.setKiosk(enabled);
     return window.isKiosk();
   });
+  channel('system:showTouchKeyboard', () => showWindowsTouchKeyboard());
   channel('system:logs', () => logger.readRecent());
 
   return async () => {

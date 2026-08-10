@@ -5,6 +5,7 @@ import { EventScreen } from '../screens/EventScreen';
 import { ResultScreen } from '../screens/ResultScreen';
 import { SetupScreen } from '../screens/SetupScreen';
 import { captureErrorMessage, isRecoverableFlashError } from './captureErrors';
+import { findTouchKeyboardTarget } from './touchKeyboard';
 
 const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const AUTOFOCUS_LEAD_MS = 500;
@@ -69,6 +70,27 @@ export function App() {
   useEffect(() => {
     const timer = window.setInterval(() => setToday(localDateInputValue()), 60_000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const openTouchKeyboard = (event: PointerEvent) => {
+      if (event.pointerType !== 'touch') return;
+      const target = findTouchKeyboardTarget(event.composedPath());
+      if (!target) return;
+
+      target.focus({ preventScroll: false });
+      target.scrollIntoView({ block: 'center', inline: 'nearest' });
+      const virtualKeyboard = (navigator as Navigator & { virtualKeyboard?: { show(): void } }).virtualKeyboard;
+      try {
+        virtualKeyboard?.show();
+      } catch {
+        // Windows TabTip below remains the reliable packaged-app fallback.
+      }
+      void window.booth.system.showTouchKeyboard().catch(() => undefined);
+    };
+
+    document.addEventListener('pointerup', openTouchKeyboard, true);
+    return () => document.removeEventListener('pointerup', openTouchKeyboard, true);
   }, []);
 
   const eventActive = Boolean(config && isEventActive(config, today));
