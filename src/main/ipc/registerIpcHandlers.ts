@@ -10,6 +10,7 @@ import { CanonCameraAdapter } from '../camera/CanonCameraAdapter';
 import { EventStorage } from '../storage/eventStorage';
 import { SessionStorage } from '../storage/sessionStorage';
 import { renderPhotoLayout } from '../layout/renderPhotoLayout';
+import { bundledSamplePhotoPaths } from '../layout/samplePhotos';
 import { WindowsPrinterAdapter } from '../printer/WindowsPrinterAdapter';
 import { UploadQueue } from '../cloud/uploadQueue';
 import { Logger } from '../logging/logger';
@@ -50,6 +51,11 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
   const recaps = new RecapQueue();
   const previewRoot = path.join(app.getPath('temp'), 'camera-booth-preview');
   const layoutAssetRoot = path.join(app.getPath('userData'), 'layout-assets');
+  const samplePhotos = bundledSamplePhotoPaths({
+    packaged: app.isPackaged,
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath,
+  });
   let camera: CameraAdapter | null = null;
 
   protocol.handle('camera-booth-video', async (request) => {
@@ -495,23 +501,9 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
     const config = normalizeLayoutConfig(input);
     await mkdir(previewRoot, { recursive: true });
     const previewDirectory = await mkdtemp(path.join(previewRoot, 'render-'));
-    const photos: string[] = [];
-    const colors = [
-      ['#c9b8a3', '#6f6258'],
-      ['#b9aaa0', '#4f4945'],
-      ['#c7beb4', '#5b544d'],
-    ];
-    for (let index = 0; index < 3; index++) {
-      const file = path.join(previewDirectory, `sample-${index}.jpg`);
-      const [start, end] = colors[index];
-      const svg = Buffer.from(
-        `<svg width="1600" height="1100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g"><stop stop-color="${start}"/><stop offset="1" stop-color="${end}"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/><circle cx="800" cy="420" r="220" fill="#ead6c2"/><path d="M400 1100 Q800 580 1200 1100" fill="#f6f2ec"/><text x="70" y="1000" fill="white" font-size="64" font-family="Arial">PREVIEW ${index + 1}</text></svg>`,
-      );
-      await sharp(svg).jpeg({ quality: 90 }).toFile(file);
-      photos.push(file);
-    }
+    await Promise.all(samplePhotos.map(validateJpeg));
     const outputPath = path.join(previewDirectory, 'layout-preview.jpg');
-    await renderPhotoLayout({ photos, outputPath, config, railImagePath: railImagePath(config) });
+    await renderPhotoLayout({ photos: samplePhotos, outputPath, config, railImagePath: railImagePath(config) });
     const result = { path: outputPath, dataUrl: await imageDataUrl(outputPath) };
     void pruneOldPreviews(previewDirectory);
     return result;
