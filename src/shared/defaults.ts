@@ -1,5 +1,5 @@
-import type { EventConfig, LayoutConfig, SessionMetadata } from './types';
-import { DEFAULT_LAYOUT_PRESET } from './layoutPresets';
+import type { EventConfig, LayoutConfig, LayoutPresetId, SessionMetadata } from './types';
+import { DEFAULT_LAYOUT_PRESET, getLayoutPreset } from './layoutPresets';
 
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -28,7 +28,7 @@ const validDateInput = (value: unknown) => {
 };
 
 export const createDefaultConfig = (baseFolder: string): EventConfig => ({
-  schemaVersion: 7,
+  schemaVersion: 8,
   id: '',
   createdAt: '',
   eventDate: '',
@@ -48,11 +48,6 @@ export const createDefaultConfig = (baseFolder: string): EventConfig => ({
     height: DEFAULT_LAYOUT_PRESET.height,
     quality: DEFAULT_LAYOUT_PRESET.defaults.quality,
     background: DEFAULT_LAYOUT_PRESET.defaults.background,
-    text: DEFAULT_LAYOUT_PRESET.defaults.text,
-    detail: '',
-    textColor: DEFAULT_LAYOUT_PRESET.defaults.textColor,
-    fontSize: DEFAULT_LAYOUT_PRESET.defaults.fontSize,
-    typeface: DEFAULT_LAYOUT_PRESET.defaults.typeface,
     railImageAssetId: '',
     railImageName: '',
   },
@@ -78,20 +73,16 @@ export const createDefaultConfig = (baseFolder: string): EventConfig => ({
 export const normalizeLayoutConfig = (value: unknown, fallback?: LayoutConfig): LayoutConfig => {
   const defaults = fallback ?? createDefaultConfig('').layout;
   const source = record(value);
+  const preset = getLayoutPreset(text(source.preset, defaults.preset) as LayoutPresetId);
   return {
-    preset: DEFAULT_LAYOUT_PRESET.id,
-    width: DEFAULT_LAYOUT_PRESET.width,
-    height: DEFAULT_LAYOUT_PRESET.height,
+    preset: preset.id,
+    width: preset.width,
+    height: preset.height,
     quality: Math.round(number(source.quality, defaults.quality, 70, 100)),
     background: color(source.background, defaults.background),
-    text: text(source.text, defaults.text).slice(0, 120),
-    detail: text(source.detail).slice(0, 180),
-    textColor: color(source.textColor, defaults.textColor),
-    fontSize: Math.round(number(source.fontSize, defaults.fontSize, 36, 220)),
-    typeface: source.typeface === 'modern-sans' ? 'modern-sans' : defaults.typeface,
     railImageAssetId: /^[0-9a-f-]{36}$/i.test(text(source.railImageAssetId)) ? text(source.railImageAssetId) : '',
     railImageName: text(source.railImageName).trim().slice(0, 180),
-  };
+  } as LayoutConfig;
 };
 
 export const normalizeEventConfig = (value: unknown, baseFolder: string): EventConfig => {
@@ -118,9 +109,8 @@ export const normalizeEventConfig = (value: unknown, baseFolder: string): EventC
       ? `${storedEventDate}T12:00:00.000Z`
       : ''
     : storedCreatedAt;
-  if (!('detail' in layoutSource) && description) layout.detail = description.slice(0, 180);
   return {
-    schemaVersion: 7,
+    schemaVersion: 8,
     id,
     createdAt,
     eventDate: storedEventDate,
@@ -143,10 +133,8 @@ export const normalizeEventConfig = (value: unknown, baseFolder: string): EventC
     layout,
     printer: {
       name: text(printer.name).slice(0, 260),
-      paperSize: ['4 × 6 in', '5 × 7 in'].includes(text(printer.paperSize))
-        ? text(printer.paperSize)
-        : defaults.printer.paperSize,
-      orientation: printer.orientation === 'landscape' ? 'landscape' : 'portrait',
+      paperSize: defaults.printer.paperSize,
+      orientation: getLayoutPreset(layout.preset).orientation,
       defaultCopies: Math.round(number(printer.defaultCopies, defaults.printer.defaultCopies, 1, maxCopies)),
       maxCopies,
     },
@@ -165,6 +153,8 @@ export const normalizeEventConfig = (value: unknown, baseFolder: string): EventC
 
 export const normalizeSessionMetadata = (value: unknown): SessionMetadata => {
   const source = record(value);
+  const layout = normalizeLayoutConfig(source.layout);
+  const photoCount = getLayoutPreset(layout.preset).photoCount;
   const createdAt = text(source.createdAt, new Date().toISOString());
   const videoStatuses = new Set(['disabled', 'pending', 'recording', 'processing', 'ready', 'failed', 'interrupted']);
   const videoStatus = text(source.videoStatus);
@@ -172,12 +162,14 @@ export const normalizeSessionMetadata = (value: unknown): SessionMetadata => {
   const recapStatus = text(source.recapStatus);
   const videoEnabled = bool(source.videoEnabled, false);
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     id: text(source.id),
     eventId: text(source.eventId),
     createdAt,
     updatedAt: text(source.updatedAt, createdAt),
     status: text(source.status, 'created'),
+    photoCount,
+    layout,
     originalPaths: Array.isArray(source.originalPaths)
       ? source.originalPaths.filter((item): item is string => typeof item === 'string')
       : [],
@@ -264,6 +256,7 @@ export const eventDraftIssues = (config: EventConfig) => {
   if (!config.eventDate) issues.push('Choose an event date.');
   if (!config.description.trim()) issues.push('Add an event description.');
   if (!config.baseFolder.trim()) issues.push('Choose an event folder.');
+  if (!config.layout.railImageAssetId) issues.push('Add rail artwork.');
   return issues;
 };
 

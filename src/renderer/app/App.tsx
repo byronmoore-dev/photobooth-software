@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppState, CapturedPhoto, EventConfig, SessionView } from '@shared/types';
 import { isEventActive, localDateInputValue } from '@shared/defaults';
+import { getLayoutPreset } from '@shared/layoutPresets';
 import { EventScreen } from '../screens/EventScreen';
 import { ResultScreen } from '../screens/ResultScreen';
 import { SetupScreen } from '../screens/SetupScreen';
@@ -94,6 +95,7 @@ export function App() {
   }, []);
 
   const eventActive = Boolean(config && isEventActive(config, today));
+  const photoCount = getLayoutPreset(config?.layout.preset ?? 'side-rail-three-stack').photoCount;
 
   useEffect(() => {
     if (eventActive || state !== 'IDLE' || !connected) return;
@@ -157,7 +159,7 @@ export function App() {
       setSession(current);
       current = await window.booth.session.startVideo(current.id);
       setSession(current);
-      for (let index = 0; index < 3; index++) {
+      for (let index = 0; index < photoCount; index++) {
         let photo: CapturedPhoto | null = null;
         while (!photo) {
           setState('COUNTDOWN');
@@ -194,7 +196,7 @@ export function App() {
         setPhotos((currentPhotos) => [...currentPhotos, photo.dataUrl]);
         setFrame(photo.dataUrl);
         setState('PHOTO_PREVIEW');
-        if (index === 2) {
+        if (index === photoCount - 1) {
           const video = window.booth.session.stopVideo(current.id);
           const [rendered] = await Promise.all([
             window.booth.session.render(current.id),
@@ -308,6 +310,7 @@ export function App() {
       state={state}
       frame={frame}
       photos={photos}
+      photoCount={photoCount}
       connected={connected}
       setupRequired={!eventActive}
       mirrored={config.capture.mirrorLiveView}

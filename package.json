@@ -1,6 +1,6 @@
 {
   "name": "camera-booth",
-  "version": "0.19.2",
+  "version": "0.20.0",
   "private": true,
   "packageManager": "npm@11.19.0",
   "author": "Camera Booth",
@@ -39,7 +39,7 @@
     "cross-env": "^10.1.0",
     "electron": "^43.3.0",
     "electron-builder": "^26.15.3",
-    "knip": "^6.32.0",
+    "knip": "^6.32.1",
     "postcss": "^8.5.26",
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",

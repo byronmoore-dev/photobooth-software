@@ -24,6 +24,18 @@ const runFfmpeg = (args: string[]) =>
   });
 
 describe('session recap generator', () => {
+  it('supports one-, two-, and three-photo shutter timelines', () => {
+    for (const count of [1, 2, 3]) {
+      const markers = Array.from({ length: count }, (_, index) => ({
+        index,
+        capturedAt: `2026-08-10T00:00:0${index}Z`,
+        offsetMs: (index + 1) * 2_000,
+      }));
+      const plan = createRecapPlan(markers, (count + 1) * 2_000);
+      expect(plan.segments.filter((segment) => segment.kind === 'photo')).toHaveLength(count);
+    }
+  });
+
   it('keeps the whole recording, returns to real time one second before each shutter, and targets 13.5 seconds', () => {
     const plan = createRecapPlan(
       [

@@ -2,6 +2,7 @@ import { access, mkdir, readdir, readFile, rename, rm, stat } from 'node:fs/prom
 import path from 'node:path';
 import type { EventConfig, RecoverySummary, SessionMetadata, SessionSummary, SessionView } from '../../shared/types';
 import { normalizeSessionMetadata } from '../../shared/defaults';
+import { getLayoutPreset } from '../../shared/layoutPresets';
 import { atomicWriteJson, readJsonWithBackup } from './atomicFile';
 import { EventStorage } from './eventStorage';
 
@@ -10,7 +11,7 @@ const markerSuffix = (markers: SessionMetadata['videoMarkers']) => {
   const offsets = [...markers]
     .sort((left, right) => left.index - right.index)
     .map((marker) => `${String(Math.max(0, Math.round(marker.offsetMs))).padStart(6, '0')}ms`);
-  return offsets.length === 3 ? `__shots-${offsets.join('-')}` : '';
+  return offsets.length >= 1 && offsets.length <= 3 ? `__shots-${offsets.join('-')}` : '';
 };
 
 export class SessionStorage {
@@ -35,12 +36,14 @@ export class SessionStorage {
     const now = new Date().toISOString();
     const id = `${test ? 'test-' : ''}${now.replace(/[:.]/g, '-').slice(0, 19)}-${crypto.randomUUID().slice(0, 6)}`;
     const metadata: SessionMetadata = {
-      schemaVersion: 5,
+      schemaVersion: 6,
       id,
       eventId: config.id,
       createdAt: now,
       updatedAt: now,
       status: 'created',
+      photoCount: getLayoutPreset(config.layout.preset).photoCount,
+      layout: config.layout,
       originalPaths: [],
       uploadEnabled: config.sharing.enabled && !test,
       uploadStatus: config.sharing.enabled && !test ? 'pending' : 'disabled',
@@ -98,9 +101,7 @@ export class SessionStorage {
     const candidate = path.resolve(file);
     if (path.dirname(candidate) !== path.resolve(this.folder(config, id))) return false;
     const prefix = asset === 'raw' ? 'session-video' : 'session-recap';
-    return new RegExp(`^${prefix}(?:__shots-\\d{6,}ms-\\d{6,}ms-\\d{6,}ms)?\\.mp4$`, 'i').test(
-      path.basename(candidate),
-    );
+    return new RegExp(`^${prefix}(?:__shots-\\d{6,}ms(?:-\\d{6,}ms){0,2})?\\.mp4$`, 'i').test(path.basename(candidate));
   }
 
   async save(config: EventConfig, input: SessionMetadata) {
@@ -285,7 +286,7 @@ export class SessionStorage {
         }
       }
 
-      if (validOriginals.length === 3) {
+      if (validOriginals.length === metadata.photoCount) {
         let finalValid = false;
         if (metadata.finalPath) {
           try {
@@ -307,7 +308,7 @@ export class SessionStorage {
         metadata.errors.push({
           at: new Date().toISOString(),
           step: 'recovery',
-          message: `Session stopped after ${validOriginals.length} of 3 photos. Saved originals were preserved.`,
+          message: `Session stopped after ${validOriginals.length} of ${metadata.photoCount} photos. Saved originals were preserved.`,
         });
         summary.interrupted++;
         changed = true;

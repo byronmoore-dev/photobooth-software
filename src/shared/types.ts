@@ -10,21 +10,24 @@ export type AppState =
   | 'ERROR'
   | 'SETUP';
 
-export type LayoutPresetId = 'side-rail-three-stack';
-export type LayoutTypefaceId = 'modern-sans' | 'editorial-serif';
+export type LayoutPresetId = 'side-rail-one-landscape' | 'center-rail-two-stack' | 'side-rail-three-stack';
+export type PhotoCount = 1 | 2 | 3;
 
 interface LayoutConfigBase {
   width: number;
   height: number;
   quality: number;
   background: string;
-  text: string;
-  detail: string;
-  textColor: string;
-  fontSize: number;
-  typeface: LayoutTypefaceId;
   railImageAssetId: string;
   railImageName: string;
+}
+
+interface SideRailOneLandscapeLayoutConfig extends LayoutConfigBase {
+  preset: 'side-rail-one-landscape';
+}
+
+interface CenterRailTwoStackLayoutConfig extends LayoutConfigBase {
+  preset: 'center-rail-two-stack';
 }
 
 interface SideRailThreeStackLayoutConfig extends LayoutConfigBase {
@@ -32,10 +35,11 @@ interface SideRailThreeStackLayoutConfig extends LayoutConfigBase {
 }
 
 /** Discriminated union: add future preset-specific configuration types here. */
-export type LayoutConfig = SideRailThreeStackLayoutConfig;
+export type LayoutConfig =
+  SideRailOneLandscapeLayoutConfig | CenterRailTwoStackLayoutConfig | SideRailThreeStackLayoutConfig;
 
 export interface EventConfig {
-  schemaVersion: 7;
+  schemaVersion: 8;
   id: string;
   createdAt: string;
   eventDate: string;
@@ -115,12 +119,14 @@ interface SessionVideoMarker {
 }
 
 export interface SessionMetadata {
-  schemaVersion: 5;
+  schemaVersion: 6;
   id: string;
   eventId: string;
   createdAt: string;
   updatedAt: string;
   status: string;
+  photoCount: PhotoCount;
+  layout: LayoutConfig;
   originalPaths: string[];
   finalPath?: string;
   requestedCopies?: number;
@@ -216,7 +222,7 @@ export interface BoothApi {
   };
   layout: {
     preview(config: LayoutConfig): Promise<{ path: string; dataUrl: string }>;
-    chooseRailImage(): Promise<{ assetId: string; name: string } | null>;
+    chooseRailImage(config: LayoutConfig): Promise<{ assetId: string; name: string } | null>;
   };
   diagnostics: { run(): Promise<DiagnosticsResult[]> };
   upload: { retryPending(): Promise<number> };

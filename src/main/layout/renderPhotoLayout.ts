@@ -2,103 +2,53 @@ import sharp from 'sharp';
 import type { LayoutConfig } from '../../shared/types';
 import { getLayoutPreset } from '../../shared/layoutPresets';
 
-export interface LayoutGeometry {
-  railWidth: number;
-  photoWidth: number;
-  photoHeight: number;
+interface LayoutRegion {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
 }
 
-const escapeXml = (value: string) =>
-  value.replace(/[<>&'"]/g, (character) => {
-    const entities: Record<string, string> = {
-      '<': '&lt;',
-      '>': '&gt;',
-      '&': '&amp;',
-      "'": '&apos;',
-      '"': '&quot;',
-    };
-    return entities[character];
-  });
+export interface LayoutGeometry {
+  rail: LayoutRegion;
+  photos: LayoutRegion[];
+}
 
 export function getLayoutGeometry(config: LayoutConfig): LayoutGeometry {
-  const preset = getLayoutPreset(config.preset);
-  const railWidth = Math.round(config.width * (preset.railWidthPercent / 100));
-  return {
-    railWidth,
-    photoWidth: config.width - railWidth,
-    photoHeight: Math.floor(config.height / 3),
-  };
-}
-
-const fitVerticalFontSize = (text: string, requested: number, availableLength: number) => {
-  if (!text) return requested;
-  return Math.max(36, Math.min(requested, Math.floor(availableLength / (text.length * 0.62))));
-};
-
-async function renderSideRailThreeStack(
-  photos: string[],
-  outputPath: string,
-  config: LayoutConfig,
-  railImagePath?: string,
-) {
-  const geometry = getLayoutGeometry(config);
-  const composites: sharp.OverlayOptions[] = [];
-
-  for (let index = 0; index < 3; index++) {
-    const image = await sharp(photos[index])
-      .rotate()
-      .resize(geometry.photoWidth, geometry.photoHeight, { fit: 'cover', position: 'centre' })
-      .jpeg({ quality: config.quality, chromaSubsampling: '4:4:4' })
-      .toBuffer();
-    composites.push({ input: image, left: geometry.railWidth, top: index * geometry.photoHeight });
+  switch (config.preset) {
+    case 'side-rail-one-landscape': {
+      const railWidth = Math.round(config.width / 6);
+      return {
+        rail: { left: 0, top: 0, width: railWidth, height: config.height },
+        photos: [{ left: railWidth, top: 0, width: config.width - railWidth, height: config.height }],
+      };
+    }
+    case 'center-rail-two-stack': {
+      const railHeight = Math.round(config.height / 6);
+      const photoHeight = Math.floor((config.height - railHeight) / 2);
+      return {
+        rail: { left: 0, top: photoHeight, width: config.width, height: railHeight },
+        photos: [
+          { left: 0, top: 0, width: config.width, height: photoHeight },
+          { left: 0, top: photoHeight + railHeight, width: config.width, height: photoHeight },
+        ],
+      };
+    }
+    case 'side-rail-three-stack': {
+      const railWidth = Math.round(config.width / 4);
+      const photoHeight = Math.floor(config.height / 3);
+      return {
+        rail: { left: 0, top: 0, width: railWidth, height: config.height },
+        photos: [0, 1, 2].map((index) => ({
+          left: railWidth,
+          top: index * photoHeight,
+          width: config.width - railWidth,
+          height: photoHeight,
+        })),
+      };
+    }
   }
-
-  const mainSize = fitVerticalFontSize(config.text, config.fontSize, config.height - 300);
-  const detailSize = fitVerticalFontSize(config.detail, Math.max(30, Math.round(mainSize * 0.32)), config.height - 360);
-  if (railImagePath) {
-    const artwork = await sharp(railImagePath)
-      .rotate()
-      .resize(geometry.railWidth, config.height, { fit: 'cover', position: 'centre' })
-      .png()
-      .toBuffer();
-    composites.push({ input: artwork, left: 0, top: 0 });
-  }
-
-  const fontFamily = config.typeface === 'editorial-serif' ? 'Georgia, serif' : 'Segoe UI, sans-serif';
-  const rail = Buffer.from(`
-    <svg width="${geometry.railWidth}" height="${config.height}" xmlns="http://www.w3.org/2000/svg">
-      ${
-        railImagePath
-          ? ''
-          : `<rect width="100%" height="100%" fill="${config.background}"/>
-      <circle cx="${Math.round(geometry.railWidth / 2)}" cy="105" r="18" fill="none" stroke="${config.textColor}" stroke-width="5"/>
-      <line x1="${Math.round(geometry.railWidth / 2)}" y1="150" x2="${Math.round(geometry.railWidth / 2)}" y2="270" stroke="${config.textColor}" stroke-width="3" opacity="0.45"/>`
-      }
-      <g transform="translate(${Math.round(geometry.railWidth * 0.43)} ${Math.round(config.height / 2)}) rotate(-90)">
-        <text x="0" y="0" text-anchor="middle" dominant-baseline="middle" fill="${config.textColor}" font-family="${fontFamily}" font-weight="600" font-size="${mainSize}" letter-spacing="-2">${escapeXml(config.text)}</text>
-      </g>
-      ${
-        config.detail
-          ? `<g transform="translate(${Math.round(geometry.railWidth * 0.76)} ${Math.round(config.height / 2)}) rotate(-90)">
-        <text x="0" y="0" text-anchor="middle" dominant-baseline="middle" fill="${config.textColor}" opacity="0.78" font-family="${fontFamily}" font-weight="500" font-size="${detailSize}" letter-spacing="3">${escapeXml(config.detail)}</text>
-      </g>`
-          : ''
-      }
-    </svg>
-  `);
-  composites.push({ input: rail, left: 0, top: 0 });
-
-  await sharp({
-    create: { width: config.width, height: config.height, channels: 3, background: config.background },
-  })
-    .composite(composites)
-    .jpeg({ quality: config.quality, chromaSubsampling: '4:4:4' })
-    .toFile(outputPath);
 }
-
-const renderers: Record<LayoutConfig['preset'], typeof renderSideRailThreeStack> = {
-  'side-rail-three-stack': renderSideRailThreeStack,
-};
 
 export async function renderPhotoLayout(input: {
   photos: string[];
@@ -106,7 +56,41 @@ export async function renderPhotoLayout(input: {
   config: LayoutConfig;
   railImagePath?: string;
 }) {
-  if (input.photos.length !== 3) throw new Error('Three photos are required');
-  await renderers[input.config.preset](input.photos, input.outputPath, input.config, input.railImagePath);
+  const preset = getLayoutPreset(input.config.preset);
+  if (input.photos.length !== preset.photoCount) {
+    throw new Error(`${preset.photoCount} photo${preset.photoCount === 1 ? '' : 's'} required for ${preset.name}`);
+  }
+
+  const geometry = getLayoutGeometry(input.config);
+  const composites: sharp.OverlayOptions[] = [];
+  for (const [index, region] of geometry.photos.entries()) {
+    const image = await sharp(input.photos[index])
+      .rotate()
+      .resize(region.width, region.height, { fit: 'cover', position: 'centre' })
+      .jpeg({ quality: input.config.quality, chromaSubsampling: '4:4:4' })
+      .toBuffer();
+    composites.push({ input: image, left: region.left, top: region.top });
+  }
+
+  if (input.railImagePath) {
+    const artwork = await sharp(input.railImagePath)
+      .rotate()
+      .resize(geometry.rail.width, geometry.rail.height, { fit: 'cover', position: 'centre' })
+      .png()
+      .toBuffer();
+    composites.push({ input: artwork, left: geometry.rail.left, top: geometry.rail.top });
+  }
+
+  await sharp({
+    create: {
+      width: input.config.width,
+      height: input.config.height,
+      channels: 3,
+      background: input.config.background,
+    },
+  })
+    .composite(composites)
+    .jpeg({ quality: input.config.quality, chromaSubsampling: '4:4:4' })
+    .toFile(input.outputPath);
   return input.outputPath;
 }

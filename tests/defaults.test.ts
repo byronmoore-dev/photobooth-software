@@ -21,6 +21,8 @@ describe('event configuration', () => {
     expect(defaults.eventDate).toBe('');
     expect(defaults.capture).toMatchObject({ countdownSeconds: 8, previewMs: 2000, sessionVideoEnabled: false });
     expect(defaults.capture).not.toHaveProperty('transitionMs');
+    expect(defaults.layout).not.toHaveProperty('text');
+    expect(defaults.layout).not.toHaveProperty('detail');
   });
 
   it('sanitizes IDs and clamps dependent copy settings', () => {
@@ -43,9 +45,19 @@ describe('event configuration', () => {
   it('normalizes every output to a true 4 by 6 aspect ratio', () => {
     const layout = normalizeLayoutConfig({ width: 1600, height: 9999, preset: 'unknown' });
     expect(layout).toMatchObject({ preset: 'side-rail-three-stack', width: 1200, height: 1800 });
+    expect(normalizeLayoutConfig({ preset: 'side-rail-one-landscape' })).toMatchObject({
+      preset: 'side-rail-one-landscape',
+      width: 1800,
+      height: 1200,
+    });
+    expect(normalizeLayoutConfig({ preset: 'center-rail-two-stack' })).toMatchObject({
+      preset: 'center-rail-two-stack',
+      width: 1200,
+      height: 1800,
+    });
   });
 
-  it('migrates a legacy layout and carries event information into the rail', () => {
+  it('migrates a legacy layout without retaining app-generated rail copy', () => {
     const migrated = normalizeEventConfig(
       {
         schemaVersion: 2,
@@ -55,16 +67,16 @@ describe('event configuration', () => {
       },
       'C:\\Events',
     );
-    expect(migrated.schemaVersion).toBe(7);
+    expect(migrated.schemaVersion).toBe(8);
     expect(migrated.createdAt).toBe('');
     expect(migrated.eventDate).toBe('');
     expect(migrated.layout).toMatchObject({
       preset: 'side-rail-three-stack',
       width: 1200,
       height: 1800,
-      text: 'Congratulations',
-      detail: 'Byron & Alex · August 2026',
     });
+    expect(migrated.layout).not.toHaveProperty('text');
+    expect(migrated.layout).not.toHaveProperty('detail');
   });
 
   it('migrates the old untouched capture timing defaults and removes the photo pause', () => {
@@ -112,7 +124,9 @@ describe('event configuration', () => {
       ],
     });
 
-    expect(migrated.schemaVersion).toBe(5);
+    expect(migrated.schemaVersion).toBe(6);
+    expect(migrated.photoCount).toBe(3);
+    expect(migrated.layout.preset).toBe('side-rail-three-stack');
     expect(migrated.videoStatus).toBe('recording');
     expect(migrated.recapStatus).toBe('pending');
     expect(migrated.recapVersion).toBe(0);
@@ -128,7 +142,7 @@ describe('event configuration', () => {
       recapPath: 'C:\\Events\\session-recap.mp4',
     });
     expect(priorRecap).toMatchObject({
-      schemaVersion: 5,
+      schemaVersion: 6,
       videoTimelineFramesPerSecond: 20,
       videoDurationMs: 32_550,
       recapVersion: 1,
@@ -147,6 +161,11 @@ describe('event configuration', () => {
       id: 'gala',
       description: 'Summer Gala',
       eventDate: localDateInputValue(),
+      layout: {
+        ...incomplete.layout,
+        railImageAssetId: '11111111-1111-4111-8111-111111111111',
+        railImageName: 'gala.png',
+      },
     };
     expect(isEventDraftComplete(draft)).toBe(true);
     expect(isEventConfigured(draft)).toBe(false);
@@ -155,6 +174,19 @@ describe('event configuration', () => {
     expect(isEventConfigured(configured)).toBe(true);
     expect(isEventActive(configured)).toBe(true);
     expect(isEventActive(configured, '2099-01-01')).toBe(false);
+  });
+
+  it('requires rail artwork even when an older event predates the artwork-only layouts', () => {
+    const legacy = {
+      ...createDefaultConfig('C:\\Events'),
+      id: 'legacy-event',
+      description: 'Legacy Event',
+      eventDate: localDateInputValue(),
+      createdAt: new Date().toISOString(),
+    };
+
+    expect(isEventConfigured(legacy)).toBe(false);
+    expect(eventSetupIssues(legacy)).toContain('Add rail artwork.');
   });
 
   it('clears an invalid stored event date during migration', () => {

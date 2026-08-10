@@ -44,7 +44,7 @@ const api: BoothApi = {
   },
   layout: {
     preview: (config) => invoke('layout:preview', config),
-    chooseRailImage: () => invoke('layout:chooseRailImage'),
+    chooseRailImage: (config) => invoke('layout:chooseRailImage', config),
   },
   diagnostics: { run: () => invoke('diagnostics:run') },
   upload: { retryPending: () => invoke('upload:retryPending') },

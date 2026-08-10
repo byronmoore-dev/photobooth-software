@@ -4,6 +4,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDefaultConfig } from '../src/shared/defaults';
+import { applyLayoutPreset } from '../src/shared/layoutPresets';
 import { SessionStorage } from '../src/main/storage/sessionStorage';
 
 const folders: string[] = [];
@@ -30,6 +31,15 @@ const validateJpeg = async (file: string) => {
 };
 
 describe('session storage and recovery', () => {
+  it('snapshots the selected layout and its capture count into each session', async () => {
+    const { config, storage } = await fixture();
+    config.layout = applyLayoutPreset(config.layout, 'center-rail-two-stack');
+    await expect(storage.create(config)).resolves.toMatchObject({
+      photoCount: 2,
+      layout: { preset: 'center-rail-two-stack', width: 1200, height: 1800 },
+    });
+  });
+
   it('serializes concurrent metadata changes without losing either update', async () => {
     const { config, storage } = await fixture();
     const created = await storage.create(config);
@@ -66,6 +76,27 @@ describe('session storage and recovery', () => {
     const recovered = await storage.get(config, session.id);
     expect(recovered.status).toBe('ready');
     await expect(access(recovered.finalPath!)).resolves.toBeUndefined();
+  });
+
+  it('recovers a complete one-photo landscape session without waiting for extra originals', async () => {
+    const { config, storage } = await fixture();
+    config.layout = applyLayoutPreset(config.layout, 'side-rail-one-landscape');
+    const session = await storage.create(config);
+    const original = storage.originalPath(config, session.id, 0);
+    await writeJpeg(original);
+    session.originalPaths = [original];
+    session.status = 'processing';
+    await storage.save(config, session);
+
+    const summary = await storage.recover(config, validateJpeg, async (metadata) => {
+      expect(metadata.photoCount).toBe(1);
+      const output = storage.finalPath(config, metadata.id);
+      await writeJpeg(output);
+      return output;
+    });
+
+    expect(summary.recovered).toBe(1);
+    await expect(storage.get(config, session.id)).resolves.toMatchObject({ status: 'ready', photoCount: 1 });
   });
 
   it('marks a partial capture interrupted while preserving its original', async () => {
@@ -174,6 +205,9 @@ describe('session storage and recovery', () => {
     );
     expect(path.basename(storage.recapPath(config, session.id, markers))).toBe(
       'session-recap__shots-008421ms-019734ms-031062ms.mp4',
+    );
+    expect(path.basename(storage.videoPath(config, session.id, markers.slice(0, 1)))).toBe(
+      'session-video__shots-008421ms.mp4',
     );
   });
 });

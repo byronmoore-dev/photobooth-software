@@ -49,8 +49,8 @@ interface GenerateRecapInput {
 
 export const createRecapPlan = (markers: SessionMetadata['videoMarkers'], inputVideoDurationMs: number): RecapPlan => {
   const ordered = [...markers].sort((left, right) => left.index - right.index);
-  if (ordered.length !== 3 || ordered.some((marker, index) => marker.index !== index)) {
-    throw new Error('A recap requires one shutter timestamp for each of the three photos');
+  if (ordered.length < 1 || ordered.length > 3 || ordered.some((marker, index) => marker.index !== index)) {
+    throw new Error('A recap requires one sequential shutter timestamp for every photo');
   }
   const videoDurationMs = Math.max(1, Math.round(inputVideoDurationMs));
   if (!Number.isFinite(inputVideoDurationMs) || ordered.at(-1)!.offsetMs > videoDurationMs) {
@@ -151,7 +151,9 @@ const portraitFilter = (
 };
 
 export const generateRecap = async (input: GenerateRecapInput) => {
-  if (input.originalPaths.length !== 3) throw new Error('A recap requires exactly three original photos');
+  if (input.originalPaths.length !== input.markers.length || input.originalPaths.length < 1) {
+    throw new Error('A recap requires one original for every shutter timestamp');
+  }
   const plan = createRecapPlan(input.markers, input.videoDurationMs);
   const width = input.width ?? 1080;
   const height = input.height ?? 1920;
@@ -173,10 +175,12 @@ export const generateRecap = async (input: GenerateRecapInput) => {
       ),
     );
   }
-  for (let index = 0; index < 3; index++) {
+  for (let index = 0; index < input.originalPaths.length; index++) {
     filters.push(...portraitFilter(`[${index + 1}:v]`, `photo${index}`, width, height, PHOTO_REVEAL_MS));
   }
-  filters.push(...portraitFilter('[4:v]', 'final', width, height, plan.finalDurationMs));
+  filters.push(
+    ...portraitFilter(`[${input.originalPaths.length + 1}:v]`, 'final', width, height, plan.finalDurationMs),
+  );
   let videoIndex = 0;
   const timelineLabels = plan.segments
     .map((segment) => (segment.kind === 'video' ? `[video${videoIndex++}]` : `[photo${segment.index}]`))

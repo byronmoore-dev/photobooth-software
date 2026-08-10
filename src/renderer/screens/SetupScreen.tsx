@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { eventDraftIssues, isEventActive, isEventDraftComplete } from '@shared/defaults';
-import { applyLayoutPreset, LAYOUT_PRESETS } from '@shared/layoutPresets';
-import type { DiagnosticsResult, EventConfig, LogEntry, PrinterInfo, SessionSummary } from '@shared/types';
+import { applyLayoutPreset, DEFAULT_LAYOUT_PRESET, getLayoutPreset, LAYOUT_PRESETS } from '@shared/layoutPresets';
+import type {
+  DiagnosticsResult,
+  EventConfig,
+  LayoutConfig,
+  LogEntry,
+  PrinterInfo,
+  SessionSummary,
+} from '@shared/types';
 import { PrintQuantity } from '../components/PrintQuantity';
 import { TouchDatePicker } from '../components/TouchDatePicker';
 
@@ -78,6 +85,103 @@ function Toggle({
         />
       </span>
     </button>
+  );
+}
+
+function LayoutThumbnail({ preset, selected }: { preset: LayoutConfig['preset']; selected: boolean }) {
+  const rail = selected ? 'bg-[#b8a485]' : 'bg-[#d3c6b3]';
+  const photo = selected ? 'bg-stone-50' : 'bg-white/80';
+  if (preset === 'side-rail-one-landscape') {
+    return (
+      <span
+        className="grid aspect-[3/2] w-24 grid-cols-[1fr_5fr] overflow-hidden rounded-xl bg-stone-300"
+        aria-hidden="true"
+      >
+        <i className={rail} />
+        <i className={photo} />
+      </span>
+    );
+  }
+  if (preset === 'center-rail-two-stack') {
+    return (
+      <span
+        className="grid aspect-[2/3] h-20 grid-rows-[5fr_2fr_5fr] overflow-hidden rounded-xl bg-stone-300"
+        aria-hidden="true"
+      >
+        <i className={photo} />
+        <i className={rail} />
+        <i className={photo} />
+      </span>
+    );
+  }
+  return (
+    <span
+      className="grid aspect-[2/3] h-20 grid-cols-[1fr_3fr] overflow-hidden rounded-xl bg-stone-300"
+      aria-hidden="true"
+    >
+      <i className={rail} />
+      <span className="grid grid-rows-3 gap-px bg-stone-300">
+        <i className={photo} />
+        <i className={photo} />
+        <i className={photo} />
+      </span>
+    </span>
+  );
+}
+
+function LayoutPicker({ layout, onChange }: { layout: LayoutConfig; onChange(layout: LayoutConfig): void }) {
+  return (
+    <div className="grid gap-3 md:grid-cols-3" role="radiogroup" aria-label="Print layout">
+      {LAYOUT_PRESETS.map((preset) => {
+        const selected = layout.preset === preset.id;
+        return (
+          <button
+            key={preset.id}
+            className={`relative flex min-h-48 flex-col items-start rounded-[1.5rem] p-5 text-left transition-[background-color,color,transform] active:scale-[0.99] ${selected ? 'bg-stone-900 text-white shadow-[0_18px_45px_rgba(28,25,23,0.16)]' : 'bg-stone-100 text-stone-900 hover:bg-stone-200/80'}`}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(applyLayoutPreset(layout, preset.id))}
+          >
+            <LayoutThumbnail preset={preset.id} selected={selected} />
+            <strong className="mt-5 block text-base font-semibold">{preset.name}</strong>
+            <span className={`mt-auto pt-4 text-xs leading-5 ${selected ? 'text-stone-400' : 'text-stone-500'}`}>
+              {preset.photoCount} photo{preset.photoCount === 1 ? '' : 's'} · {preset.printSize}
+            </span>
+            <span
+              className={`absolute top-5 right-5 grid size-7 place-items-center rounded-full ${selected ? 'bg-white text-stone-950' : 'bg-white text-transparent'}`}
+              aria-hidden="true"
+            >
+              ✓
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function RailArtworkControl({ layout, busy, onChoose }: { layout: LayoutConfig; busy: boolean; onChoose(): void }) {
+  const preset = getLayoutPreset(layout.preset);
+  return (
+    <div className={`rounded-[1.5rem] p-5 ${layout.railImageAssetId ? 'bg-stone-100' : 'bg-[#f5eee5]'}`}>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
+          <strong className="block text-base">Rail Artwork</strong>
+          <span
+            className={`mt-1 block truncate text-sm ${layout.railImageAssetId ? 'text-stone-500' : 'text-[#8a5d43]'}`}
+          >
+            {layout.railImageName || 'PNG required for this event'}
+          </span>
+        </div>
+        <button className={actionClass} type="button" disabled={busy} onClick={onChoose}>
+          {busy ? 'Importing…' : layout.railImageAssetId ? 'Replace PNG' : 'Add PNG'}
+        </button>
+      </div>
+      <p className="mt-4 text-sm leading-6 text-stone-500">
+        Use a {preset.artworkSize} PNG for the {preset.railSize} rail. Larger artwork is centered and cropped.
+      </p>
+    </div>
   );
 }
 
@@ -303,18 +407,22 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
     if (folder) setNewEventDraft((current) => (current ? { ...current, baseFolder: folder } : current));
   };
 
-  const chooseRailArtwork = async () => {
+  const chooseRailArtwork = async (
+    layout: LayoutConfig,
+    onSelected: (layout: LayoutConfig) => void,
+    destination: Tab,
+  ) => {
     setBusy('rail-artwork');
     try {
-      const artwork = await window.booth.layout.chooseRailImage();
+      const artwork = await window.booth.layout.chooseRailImage(layout);
       if (!artwork) return;
-      patch('layout', {
-        ...draft.layout,
+      onSelected({
+        ...layout,
         railImageAssetId: artwork.assetId,
         railImageName: artwork.name,
       });
       setMessageTone('success');
-      setMessageTab('Layout');
+      setMessageTab(destination);
       setMessage('Rail artwork added.');
     } catch (reason) {
       showError(reason);
@@ -381,16 +489,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
     setMessage('');
     try {
       await saveQueue.current.catch(() => config);
-      const creationDraft = {
-        ...newEventDraft,
-        layout: {
-          ...newEventDraft.layout,
-          detail:
-            newEventDraft.layout.detail.trim() ||
-            `${newEventDraft.description.trim()} · ${eventDate.format(dateInputToLocalDate(newEventDraft.eventDate))}`,
-        },
-      };
-      const created = await onCreate(creationDraft);
+      const created = await onCreate(newEventDraft);
       setDraft(created);
       setNewEventDraft(null);
       lastSaved.current = JSON.stringify(created);
@@ -415,7 +514,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
       createdAt: '',
       eventDate: '',
       description: '',
-      layout: { ...draft.layout, detail: '' },
+      layout: applyLayoutPreset(draft.layout, DEFAULT_LAYOUT_PRESET.id),
     });
     setTab('Set Up');
   };
@@ -473,14 +572,16 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
             <button
               key={item}
               id={`tab-${tabId(item)}`}
-              className={`min-h-14 rounded-[1.2rem] px-5 text-left text-base font-medium transition-[background-color,color] ${tab === item ? 'bg-stone-200/80 text-stone-950' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-800'}`}
+              className={`min-h-14 rounded-[1.2rem] px-5 text-left text-base font-medium transition-[background-color,color] disabled:cursor-not-allowed disabled:opacity-35 ${tab === item ? 'bg-stone-200/80 text-stone-950' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-800'}`}
               type="button"
+              disabled={Boolean(newEventDraft && item !== 'Set Up')}
               role="tab"
               aria-selected={tab === item}
               aria-controls={`panel-${tabId(item)}`}
               tabIndex={tab === item ? 0 : -1}
               onClick={() => setTab(item)}
               onKeyDown={(event) => {
+                if (newEventDraft) return;
                 if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
                 event.preventDefault();
                 const current = tabs.indexOf(item);
@@ -647,6 +748,29 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                       </button>
                     </div>
                   </Field>
+                  <div className="mt-3 grid gap-5 md:col-span-2">
+                    <div>
+                      <h4 className="text-xl font-semibold tracking-[-0.03em]">Print Layout</h4>
+                      <p className="mt-2 text-sm leading-6 text-stone-500">
+                        This choice controls how many photos the booth takes in every session.
+                      </p>
+                    </div>
+                    <LayoutPicker
+                      layout={newEventDraft.layout}
+                      onChange={(layout) => patchNewEvent('layout', layout)}
+                    />
+                    <RailArtworkControl
+                      layout={newEventDraft.layout}
+                      busy={busy === 'rail-artwork'}
+                      onChoose={() =>
+                        void chooseRailArtwork(
+                          newEventDraft.layout,
+                          (layout) => patchNewEvent('layout', layout),
+                          'Set Up',
+                        )
+                      }
+                    />
+                  </div>
                 </div>
                 <div className="mt-10 flex items-center gap-4">
                   <button
@@ -659,7 +783,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                   </button>
                   {draftIssues.length ? (
                     <p className="text-sm text-stone-500" aria-live="polite">
-                      Complete every field to create the event.
+                      {draftIssues[0]}
                     </p>
                   ) : null}
                 </div>
@@ -694,6 +818,18 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                     <dt className="text-sm font-semibold text-stone-500">Event Folder</dt>
                     <dd className="mt-2 text-base leading-6 font-medium break-all text-stone-700">
                       {draft.baseFolder}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-semibold text-stone-500">Print Layout</dt>
+                    <dd className="mt-2 text-base font-medium text-stone-900">
+                      {getLayoutPreset(draft.layout.preset).name}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-semibold text-stone-500">Rail Artwork</dt>
+                    <dd className="mt-2 text-base font-medium break-words text-stone-900">
+                      {draft.layout.railImageName || 'Not added'}
                     </dd>
                   </div>
                 </dl>
@@ -797,7 +933,9 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
           {tab === 'Capture' ? (
             <section className={cardClass}>
               <h3 className="text-2xl font-semibold tracking-[-0.035em]">Session timing</h3>
-              <p className="mt-2 mb-8 text-base leading-7 text-stone-500">Set the pace of each three-photo session.</p>
+              <p className="mt-2 mb-8 text-base leading-7 text-stone-500">
+                Set the pace of each {getLayoutPreset(draft.layout.preset).photoCount}-photo session.
+              </p>
               <div className="grid max-w-3xl gap-5 md:grid-cols-2">
                 <Field label="Countdown" hint="Seconds">
                   <input
@@ -853,109 +991,15 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
               <section className={cardClass}>
                 <h3 className="text-2xl font-semibold tracking-[-0.035em] text-balance">Print Layout</h3>
                 <p className="mt-2 mb-8 text-base leading-7 text-stone-500">
-                  Choose a complete design, then add the event text and optional rail artwork.
+                  Choose the session format, then add the finished artwork for its rail.
                 </p>
-                <div className="mb-7 grid gap-3" role="radiogroup" aria-label="Print layout preset">
-                  {LAYOUT_PRESETS.map((preset) => {
-                    const selected = draft.layout.preset === preset.id;
-                    return (
-                      <button
-                        key={preset.id}
-                        className={`grid min-h-28 grid-cols-[4.5rem_1fr_auto] items-center gap-4 rounded-[1.4rem] p-4 text-left transition-colors ${selected ? 'bg-stone-900 text-white' : 'bg-stone-200/70 hover:bg-stone-200'}`}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        onClick={() => patch('layout', applyLayoutPreset(draft.layout, preset.id))}
-                      >
-                        <span
-                          className={`grid aspect-[2/3] h-16 grid-cols-[1fr_3fr] overflow-hidden rounded-lg ${selected ? 'bg-stone-700' : 'bg-stone-300'}`}
-                          aria-hidden="true"
-                        >
-                          <span className={selected ? 'bg-[#b8a485]' : 'bg-[#d3c6b3]'} />
-                          <span className="grid grid-rows-3 gap-px bg-white/30">
-                            <i className="bg-stone-50/80" />
-                            <i className="bg-stone-50/70" />
-                            <i className="bg-stone-50/60" />
-                          </span>
-                        </span>
-                        <span className="min-w-0">
-                          <strong className="block text-base font-semibold">{preset.name}</strong>
-                          <span
-                            className={`mt-1 block text-sm leading-6 ${selected ? 'text-stone-300' : 'text-stone-500'}`}
-                          >
-                            {preset.description}
-                          </span>
-                        </span>
-                        <span
-                          className={`text-right text-xs leading-5 ${selected ? 'text-stone-300' : 'text-stone-500'}`}
-                        >
-                          <b className="block font-semibold">{preset.printSize}</b>
-                          {preset.photoSize}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="grid gap-5 md:grid-cols-2">
-                  <Field label="Rail Headline">
-                    <input
-                      className={inputClass}
-                      name="layoutHeadline"
-                      autoComplete="off"
-                      maxLength={120}
-                      value={draft.layout.text}
-                      onChange={(event) => patch('layout', { ...draft.layout, text: event.target.value })}
-                      placeholder="Congratulations…"
-                    />
-                  </Field>
-                  <Field label="Event Details" hint="Event name, date, venue, or a short message">
-                    <input
-                      className={inputClass}
-                      name="layoutDetails"
-                      autoComplete="off"
-                      maxLength={180}
-                      value={draft.layout.detail}
-                      onChange={(event) => patch('layout', { ...draft.layout, detail: event.target.value })}
-                      placeholder="Summer Gala · August 2026…"
-                    />
-                  </Field>
-                </div>
-                <div className="mt-7 rounded-[1.5rem] bg-stone-100 p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <strong className="block text-base">Rail Artwork</strong>
-                      <span className="mt-1 block truncate text-sm text-stone-500">
-                        {draft.layout.railImageName || 'Use the selected design’s built-in rail'}
-                      </span>
-                    </div>
-                    <div className="flex gap-2">
-                      {draft.layout.railImageAssetId ? (
-                        <button
-                          className={quietActionClass}
-                          type="button"
-                          onClick={() => patch('layout', { ...draft.layout, railImageAssetId: '', railImageName: '' })}
-                        >
-                          Remove
-                        </button>
-                      ) : null}
-                      <button
-                        className={actionClass}
-                        type="button"
-                        disabled={busy === 'rail-artwork'}
-                        onClick={() => void chooseRailArtwork()}
-                      >
-                        {busy === 'rail-artwork'
-                          ? 'Importing…'
-                          : draft.layout.railImageAssetId
-                            ? 'Replace PNG'
-                            : 'Add PNG'}
-                      </button>
-                    </div>
-                  </div>
-                  <p className="mt-4 text-sm leading-6 text-stone-500">
-                    Use a 300 × 1800 PNG for the sharpest 1 × 6 inch rail. Other tall images are centered and cropped.
-                  </p>
+                <LayoutPicker layout={draft.layout} onChange={(layout) => patch('layout', layout)} />
+                <div className="mt-7">
+                  <RailArtworkControl
+                    layout={draft.layout}
+                    busy={busy === 'rail-artwork'}
+                    onChoose={() => void chooseRailArtwork(draft.layout, (layout) => patch('layout', layout), 'Layout')}
+                  />
                 </div>
               </section>
               <section
@@ -974,14 +1018,16 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                   <img
                     className="max-h-[29rem] max-w-full rounded-xl object-contain shadow-2xl"
                     src={preview.dataUrl}
-                    alt="4 by 6 print layout preview with a left information rail and three stacked photos"
+                    alt={`${getLayoutPreset(draft.layout.preset).name} print preview`}
                     width={draft.layout.width}
                     height={draft.layout.height}
                     loading="lazy"
                   />
                 ) : (
                   <div>
-                    <strong className="text-3xl font-medium">{busy === 'preview' ? 'Rendering…' : '4 × 6'}</strong>
+                    <strong className="text-3xl font-medium">
+                      {busy === 'preview' ? 'Rendering…' : getLayoutPreset(draft.layout.preset).printSize}
+                    </strong>
                     <p className="mt-2 text-sm text-stone-500">Preparing the print preview…</p>
                   </div>
                 )}
@@ -1049,33 +1095,13 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                       ))}
                     </select>
                   </Field>
-                  <Field label="Paper size">
-                    <select
-                      className={inputClass}
-                      name="paperSize"
-                      value={draft.printer.paperSize}
-                      onChange={(event) => patch('printer', { ...draft.printer, paperSize: event.target.value })}
-                    >
-                      <option value="4 × 6 in">4 × 6 in</option>
-                      <option value="5 × 7 in">5 × 7 in</option>
-                    </select>
-                  </Field>
-                  <Field label="Orientation">
-                    <select
-                      className={inputClass}
-                      name="printOrientation"
-                      value={draft.printer.orientation}
-                      onChange={(event) =>
-                        patch('printer', {
-                          ...draft.printer,
-                          orientation: event.target.value as 'portrait' | 'landscape',
-                        })
-                      }
-                    >
-                      <option value="portrait">Portrait</option>
-                      <option value="landscape">Landscape</option>
-                    </select>
-                  </Field>
+                  <div className="grid gap-2">
+                    <span className="pl-1 text-sm font-semibold text-stone-600">Print format</span>
+                    <div className="flex min-h-16 items-center rounded-[1.25rem] bg-stone-100 px-5 text-base font-medium">
+                      {getLayoutPreset(draft.layout.preset).printSize} ·{' '}
+                      {getLayoutPreset(draft.layout.preset).orientation === 'landscape' ? 'Landscape' : 'Portrait'}
+                    </div>
+                  </div>
                   <Field label="Default copies">
                     <input
                       className={inputClass}

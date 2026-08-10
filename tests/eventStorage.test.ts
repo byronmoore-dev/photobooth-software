@@ -39,6 +39,11 @@ describe('event lifecycle storage', () => {
       id: 'summer-gala',
       description: 'Summer Gala',
       eventDate: localDateInputValue(),
+      layout: {
+        ...createDefaultConfig('').layout,
+        railImageAssetId: '11111111-1111-4111-8111-111111111111',
+        railImageName: 'gala.png',
+      },
     };
     const created = await storage.create(draft);
     const stored = JSON.parse(await readFile(path.join(draft.baseFolder, draft.id, 'event.json'), 'utf8')) as {

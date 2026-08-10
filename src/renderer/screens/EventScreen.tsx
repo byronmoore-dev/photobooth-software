@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react';
-import type { AppState } from '@shared/types';
+import type { AppState, PhotoCount } from '@shared/types';
 import { PhotoSlots } from '../components/PhotoSlots';
 
 interface EventScreenProps {
   state: AppState;
   frame: string;
   photos: string[];
+  photoCount: PhotoCount;
   connected: boolean;
   setupRequired: boolean;
   mirrored: boolean;
@@ -21,6 +22,7 @@ export function EventScreen({
   state,
   frame,
   photos,
+  photoCount,
   connected,
   setupRequired,
   mirrored,
@@ -254,7 +256,7 @@ export function EventScreen({
           </button>
         ) : null}
 
-        <PhotoSlots photos={photos} active={active} />
+        <PhotoSlots photos={photos} photoCount={photoCount} active={active} />
       </section>
     </main>
   );

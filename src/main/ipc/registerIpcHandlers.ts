@@ -9,7 +9,7 @@ import type { CameraAdapter } from '../camera/CameraAdapter';
 import { CanonCameraAdapter } from '../camera/CanonCameraAdapter';
 import { EventStorage } from '../storage/eventStorage';
 import { SessionStorage } from '../storage/sessionStorage';
-import { renderPhotoLayout } from '../layout/renderPhotoLayout';
+import { getLayoutGeometry, renderPhotoLayout } from '../layout/renderPhotoLayout';
 import { bundledSamplePhotoPaths } from '../layout/samplePhotos';
 import { WindowsPrinterAdapter } from '../printer/WindowsPrinterAdapter';
 import { UploadQueue } from '../cloud/uploadQueue';
@@ -17,6 +17,7 @@ import { Logger } from '../logging/logger';
 import { CURRENT_RECAP_VERSION, generateRecap, RecapQueue } from '../video/recapGenerator';
 import { showWindowsTouchKeyboard } from '../system/touchKeyboard';
 import { clampCopies, eventSetupIssues, isEventActive, normalizeLayoutConfig } from '../../shared/defaults';
+import { getLayoutPreset } from '../../shared/layoutPresets';
 import type { EventConfig, LayoutConfig, SessionMetadata } from '../../shared/types';
 
 const imageDataUrl = async (file: string) => `data:image/jpeg;base64,${(await readFile(file)).toString('base64')}`;
@@ -132,8 +133,8 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
     await renderPhotoLayout({
       photos: metadata.originalPaths,
       outputPath: temporary,
-      config: config.layout,
-      railImagePath: railImagePath(config.layout),
+      config: metadata.layout,
+      railImagePath: railImagePath(metadata.layout),
     });
     await validateJpeg(temporary);
     await rm(output, { force: true });
@@ -155,8 +156,8 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
       metadata.videoStatus !== 'ready' ||
       !metadata.videoPath ||
       !metadata.finalPath ||
-      metadata.originalPaths.filter(Boolean).length !== 3 ||
-      metadata.videoMarkers.length !== 3
+      metadata.originalPaths.filter(Boolean).length !== metadata.photoCount ||
+      metadata.videoMarkers.length !== metadata.photoCount
     ) {
       return false;
     }
@@ -268,9 +269,10 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
     return sessions.view(config, metadata);
   });
   channel('camera:capture', async (sessionId: string, index: number) => {
-    if (!Number.isInteger(index) || index < 0 || index > 2) throw new Error('Invalid capture index');
+    if (!Number.isInteger(index) || index < 0) throw new Error('Invalid capture index');
     const config = await events.load();
-    await sessions.get(config, sessionId);
+    const session = await sessions.get(config, sessionId);
+    if (index >= session.photoCount) throw new Error('Invalid capture index');
     const destination = sessions.originalPath(config, sessionId, index);
     const temporary = sessions.temporaryOriginalPath(config, sessionId, index);
     await rm(temporary, { force: true });
@@ -420,7 +422,9 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
   channel('session:render', async (id: string) => {
     const config = await events.load();
     let metadata = await sessions.get(config, id);
-    if (metadata.originalPaths.filter(Boolean).length !== 3) throw new Error('Session does not contain 3 originals');
+    if (metadata.originalPaths.filter(Boolean).length !== metadata.photoCount) {
+      throw new Error(`Session does not contain ${metadata.photoCount} original photos`);
+    }
     metadata = await sessions.update(config, id, (current) => {
       current.status = 'processing';
       return current;
@@ -474,7 +478,7 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
       printerName: config.printer.name,
       copies: safeCopies,
       paperSize: config.printer.paperSize,
-      orientation: config.printer.orientation,
+      orientation: getLayoutPreset(metadata.layout.preset).orientation,
     });
     await sessions.update(config, id, (current) => {
       current.requestedCopies = safeCopies;
@@ -489,27 +493,37 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
   });
   channel('printer:testPrint', async (imagePath: string) => {
     const config = await events.load();
+    const managedPath = managedImagePath(config, imagePath);
+    const image = await sharp(managedPath).metadata();
     return printer.testPrint({
-      imagePath: managedImagePath(config, imagePath),
+      imagePath: managedPath,
       printerName: config.printer.name,
       paperSize: config.printer.paperSize,
-      orientation: config.printer.orientation,
+      orientation: image.width && image.height && image.width > image.height ? 'landscape' : 'portrait',
     });
   });
 
   channel('layout:preview', async (input: LayoutConfig) => {
     const config = normalizeLayoutConfig(input);
+    const preset = getLayoutPreset(config.preset);
     await mkdir(previewRoot, { recursive: true });
     const previewDirectory = await mkdtemp(path.join(previewRoot, 'render-'));
     await Promise.all(samplePhotos.map(validateJpeg));
     const outputPath = path.join(previewDirectory, 'layout-preview.jpg');
-    await renderPhotoLayout({ photos: samplePhotos, outputPath, config, railImagePath: railImagePath(config) });
+    await renderPhotoLayout({
+      photos: samplePhotos.slice(0, preset.photoCount),
+      outputPath,
+      config,
+      railImagePath: railImagePath(config),
+    });
     const result = { path: outputPath, dataUrl: await imageDataUrl(outputPath) };
     void pruneOldPreviews(previewDirectory);
     return result;
   });
 
-  channel('layout:chooseRailImage', async () => {
+  channel('layout:chooseRailImage', async (input: LayoutConfig) => {
+    const config = normalizeLayoutConfig(input);
+    const geometry = getLayoutGeometry(config);
     const result = await dialog.showOpenDialog({
       title: 'Choose Rail Artwork',
       properties: ['openFile'],
@@ -521,13 +535,14 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
     if (metadata.format !== 'png' || !metadata.width || !metadata.height) {
       throw new Error('Choose a valid PNG image for the print rail.');
     }
-    if (metadata.width < 300 || metadata.height < 1200) {
-      throw new Error('Rail artwork must be at least 300 × 1200 pixels.');
+    if (metadata.width < geometry.rail.width || metadata.height < geometry.rail.height) {
+      throw new Error(`Rail artwork must be at least ${geometry.rail.width} × ${geometry.rail.height} pixels.`);
     }
     const assetId = crypto.randomUUID();
     await mkdir(layoutAssetRoot, { recursive: true });
     await sharp(source)
       .rotate()
+      .resize(geometry.rail.width, geometry.rail.height, { fit: 'cover', position: 'centre' })
       .png()
       .toFile(path.join(layoutAssetRoot, `${assetId}.png`));
     logger.info('Rail artwork imported', { assetId, name: path.basename(source) });
@@ -620,7 +635,7 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
       try {
         const output = path.join(events.eventFolder(config), 'diagnostics', 'test-layout.jpg');
         await renderPhotoLayout({
-          photos: [diagnosticPhoto, diagnosticPhoto, diagnosticPhoto],
+          photos: Array.from({ length: getLayoutPreset(config.layout.preset).photoCount }, () => diagnosticPhoto),
           outputPath: output,
           config: config.layout,
           railImagePath: railImagePath(config.layout),

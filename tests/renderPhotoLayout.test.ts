@@ -4,80 +4,100 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDefaultConfig } from '../src/shared/defaults';
+import { applyLayoutPreset } from '../src/shared/layoutPresets';
+import type { LayoutPresetId } from '../src/shared/types';
 import { getLayoutGeometry, renderPhotoLayout } from '../src/main/layout/renderPhotoLayout';
 
 const folders: string[] = [];
 afterEach(async () => Promise.all(folders.splice(0).map((folder) => rm(folder, { recursive: true, force: true }))));
 
+const layoutFor = (preset: LayoutPresetId) => applyLayoutPreset(createDefaultConfig('').layout, preset);
+
+const createPhotos = async (folder: string, colors: string[]) =>
+  Promise.all(
+    colors.map(async (background, index) => {
+      const file = path.join(folder, `${index}.jpg`);
+      await sharp({ create: { width: 1500, height: 1000, channels: 3, background } })
+        .jpeg()
+        .toFile(file);
+      return file;
+    }),
+  );
+
+const pixelReader = async (file: string) => {
+  const { data, info } = await sharp(file).raw().toBuffer({ resolveWithObject: true });
+  return (x: number, y: number) => {
+    const offset = (y * info.width + x) * info.channels;
+    return [...data.subarray(offset, offset + 3)];
+  };
+};
+
 describe('photo layout renderer', () => {
-  it('defines a 1 inch rail and three exact 3 by 2 inch photo regions at 300 DPI', () => {
-    expect(getLayoutGeometry(createDefaultConfig('').layout)).toEqual({
-      railWidth: 300,
-      photoWidth: 900,
-      photoHeight: 600,
+  it('defines exact 300 DPI regions for all three layouts', () => {
+    expect(getLayoutGeometry(layoutFor('side-rail-one-landscape'))).toEqual({
+      rail: { left: 0, top: 0, width: 300, height: 1200 },
+      photos: [{ left: 300, top: 0, width: 1500, height: 1200 }],
+    });
+    expect(getLayoutGeometry(layoutFor('center-rail-two-stack'))).toEqual({
+      rail: { left: 0, top: 750, width: 1200, height: 300 },
+      photos: [
+        { left: 0, top: 0, width: 1200, height: 750 },
+        { left: 0, top: 1050, width: 1200, height: 750 },
+      ],
+    });
+    expect(getLayoutGeometry(layoutFor('side-rail-three-stack'))).toEqual({
+      rail: { left: 0, top: 0, width: 300, height: 1800 },
+      photos: [
+        { left: 300, top: 0, width: 900, height: 600 },
+        { left: 300, top: 600, width: 900, height: 600 },
+        { left: 300, top: 1200, width: 900, height: 600 },
+      ],
     });
   });
 
-  it('requires exactly three photographs', async () => {
+  it('requires the photo count selected by the layout', async () => {
     await expect(
-      renderPhotoLayout({ photos: [], outputPath: 'unused.jpg', config: createDefaultConfig('').layout }),
-    ).rejects.toThrow(/Three photos/);
+      renderPhotoLayout({ photos: [], outputPath: 'unused.jpg', config: layoutFor('side-rail-one-landscape') }),
+    ).rejects.toThrow(/1 photo required/);
+    await expect(
+      renderPhotoLayout({ photos: [], outputPath: 'unused.jpg', config: layoutFor('center-rail-two-stack') }),
+    ).rejects.toThrow(/2 photos required/);
+    await expect(
+      renderPhotoLayout({ photos: [], outputPath: 'unused.jpg', config: layoutFor('side-rail-three-stack') }),
+    ).rejects.toThrow(/3 photos required/);
   });
 
-  it('creates the configured 4 by 6 JPEG with three vertically distinct photo regions', async () => {
+  it.each([
+    ['side-rail-one-landscape' as const, ['#e53935'], 1800, 1200],
+    ['center-rail-two-stack' as const, ['#e53935', '#43a047'], 1200, 1800],
+    ['side-rail-three-stack' as const, ['#e53935', '#43a047', '#1e88e5'], 1200, 1800],
+  ])('renders %s at its production dimensions', async (preset, colors, width, height) => {
     const folder = await mkdtemp(path.join(tmpdir(), 'camera-booth-render-'));
     folders.push(folder);
-    const photos = await Promise.all(
-      ['#e53935', '#43a047', '#1e88e5'].map(async (background, index) => {
-        const file = path.join(folder, `${index}.jpg`);
-        await sharp({ create: { width: 900, height: 600, channels: 3, background } })
-          .jpeg()
-          .toFile(file);
-        return file;
-      }),
-    );
+    const photos = await createPhotos(folder, colors);
     const outputPath = path.join(folder, 'layout.jpg');
-    const config = createDefaultConfig('').layout;
-    await renderPhotoLayout({ photos, outputPath, config });
-    const metadata = await sharp(outputPath).metadata();
-    expect(metadata).toMatchObject({ format: 'jpeg', width: 1200, height: 1800 });
-
-    const { data, info } = await sharp(outputPath).raw().toBuffer({ resolveWithObject: true });
-    const pixel = (x: number, y: number) => {
-      const offset = (y * info.width + x) * info.channels;
-      return [...data.subarray(offset, offset + 3)];
-    };
-    expect(pixel(1050, 300)[0]).toBeGreaterThan(180);
-    expect(pixel(1050, 900)[1]).toBeGreaterThan(100);
-    expect(pixel(1050, 1500)[2]).toBeGreaterThan(160);
+    await renderPhotoLayout({ photos, outputPath, config: layoutFor(preset) });
+    await expect(sharp(outputPath).metadata()).resolves.toMatchObject({ format: 'jpeg', width, height });
   });
 
-  it('scales managed PNG artwork across the full information rail', async () => {
-    const folder = await mkdtemp(path.join(tmpdir(), 'camera-booth-rail-'));
+  it('places both photos around the center artwork rail', async () => {
+    const folder = await mkdtemp(path.join(tmpdir(), 'camera-booth-center-rail-'));
     folders.push(folder);
-    const photos = await Promise.all(
-      [0, 1, 2].map(async (index) => {
-        const file = path.join(folder, `${index}.jpg`);
-        await sharp({ create: { width: 900, height: 600, channels: 3, background: '#eeeeee' } })
-          .jpeg()
-          .toFile(file);
-        return file;
-      }),
-    );
-    const railImagePath = path.join(folder, 'flowers.png');
-    await sharp({ create: { width: 300, height: 1800, channels: 4, background: '#be185d' } })
+    const photos = await createPhotos(folder, ['#e53935', '#43a047']);
+    const railImagePath = path.join(folder, 'rail.png');
+    await sharp({ create: { width: 1200, height: 300, channels: 4, background: '#1e88e5' } })
       .png()
       .toFile(railImagePath);
-    const outputPath = path.join(folder, 'with-rail.jpg');
+    const outputPath = path.join(folder, 'layout.jpg');
     await renderPhotoLayout({
       photos,
       outputPath,
-      config: createDefaultConfig('').layout,
+      config: layoutFor('center-rail-two-stack'),
       railImagePath,
     });
-
-    const pixel = await sharp(outputPath).extract({ left: 10, top: 10, width: 1, height: 1 }).raw().toBuffer();
-    expect(pixel[0]).toBeGreaterThan(150);
-    expect(pixel[2]).toBeGreaterThan(60);
+    const pixel = await pixelReader(outputPath);
+    expect(pixel(600, 300)[0]).toBeGreaterThan(180);
+    expect(pixel(600, 900)[2]).toBeGreaterThan(160);
+    expect(pixel(600, 1500)[1]).toBeGreaterThan(100);
   });
 });
