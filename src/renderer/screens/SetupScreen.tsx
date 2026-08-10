@@ -3,6 +3,7 @@ import { eventDraftIssues, isEventActive, isEventDraftComplete } from '@shared/d
 import { applyLayoutPreset, LAYOUT_PRESETS } from '@shared/layoutPresets';
 import type { DiagnosticsResult, EventConfig, LogEntry, PrinterInfo, SessionSummary } from '@shared/types';
 import { PrintQuantity } from '../components/PrintQuantity';
+import { TouchDatePicker } from '../components/TouchDatePicker';
 
 const tabs = [
   'Set Up',
@@ -608,25 +609,14 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                       autoFocus
                     />
                   </Field>
-                  <Field
-                    label="Event Date"
-                    hint={
-                      newEventDraft.eventDate
-                        ? eventDate.format(dateInputToLocalDate(newEventDraft.eventDate))
-                        : 'Required'
-                    }
-                  >
-                    <input
-                      className={inputClass}
-                      name="eventDate"
-                      type="date"
-                      autoComplete="off"
-                      required
-                      aria-invalid={!newEventDraft.eventDate}
+                  <div className="grid gap-2">
+                    <span className="pl-1 text-xs font-semibold text-stone-600">Event Date</span>
+                    <TouchDatePicker
                       value={newEventDraft.eventDate}
-                      onChange={(event) => patchNewEvent('eventDate', event.target.value)}
+                      invalid={!newEventDraft.eventDate}
+                      onChange={(value) => patchNewEvent('eventDate', value)}
                     />
-                  </Field>
+                  </div>
                   <Field label="Description" hint="Event name, host, or short identifier">
                     <input
                       className={inputClass}
