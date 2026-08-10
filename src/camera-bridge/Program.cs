@@ -256,6 +256,7 @@ internal sealed class CameraHost : IDisposable
             droppedFrames = result.DroppedFrames,
             fileSize = result.FileSize,
             framesPerSecond = result.FramesPerSecond,
+            timelineFramesPerSecond = result.TimelineFramesPerSecond,
         });
     }
 

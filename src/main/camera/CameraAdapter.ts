@@ -12,6 +12,7 @@ export interface VideoRecordingResult {
   droppedFrames: number;
   fileSize: number;
   framesPerSecond: number;
+  timelineFramesPerSecond: number;
 }
 
 export interface CameraAdapter {

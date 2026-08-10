@@ -24,15 +24,23 @@ const runFfmpeg = (args: string[]) =>
   });
 
 describe('session recap generator', () => {
-  it('builds a deterministic three-shot timeline and clamps its first segment', () => {
-    const plan = createRecapPlan([
-      { index: 2, capturedAt: '2026-08-10T00:00:02Z', offsetMs: 2600 },
-      { index: 0, capturedAt: '2026-08-10T00:00:00Z', offsetMs: 500 },
-      { index: 1, capturedAt: '2026-08-10T00:00:01Z', offsetMs: 1500 },
-    ]);
+  it('keeps the whole recording, returns to real time one second before each shutter, and targets 13.5 seconds', () => {
+    const plan = createRecapPlan(
+      [
+        { index: 2, capturedAt: '2026-08-10T00:00:31Z', offsetMs: 31_000 },
+        { index: 0, capturedAt: '2026-08-10T00:00:08Z', offsetMs: 8_000 },
+        { index: 1, capturedAt: '2026-08-10T00:00:19Z', offsetMs: 19_000 },
+      ],
+      33_000,
+    );
 
-    expect(plan.items.map((item) => item.startMs)).toEqual([0, 350, 1450]);
-    expect(plan.durationMs).toBe(8900);
+    const videoSegments = plan.segments.filter((segment) => segment.kind === 'video');
+    const shutterSegments = videoSegments.filter((segment) => segment.phase === 'shutter');
+    expect(shutterSegments.map((segment) => segment.startMs)).toEqual([7_000, 18_000, 30_000]);
+    expect(shutterSegments.every((segment) => segment.speed === 1)).toBe(true);
+    expect(videoSegments.reduce((total, segment) => total + segment.durationMs, 0)).toBe(33_000);
+    expect(plan.acceleratedSpeed).toBeGreaterThan(1);
+    expect(plan.durationMs).toBe(13_500);
   });
 
   it('renders a playable portrait H.264 recap from video, originals, and final print', async () => {
@@ -83,6 +91,7 @@ describe('session recap generator', () => {
         { index: 1, capturedAt: '2026-08-10T00:00:01Z', offsetMs: 1700 },
         { index: 2, capturedAt: '2026-08-10T00:00:02Z', offsetMs: 2800 },
       ],
+      videoDurationMs: 4_000,
       title: 'Test Event',
       width: 180,
       height: 320,
@@ -91,6 +100,7 @@ describe('session recap generator', () => {
     const header = await readFile(output);
     expect(header.subarray(4, 8).toString('ascii')).toBe('ftyp');
     expect((await stat(output)).size).toBeGreaterThan(1_000);
-    expect(plan.durationMs).toBe(8900);
+    expect(plan.durationMs).toBeGreaterThanOrEqual(6_800);
+    expect(plan.durationMs).toBeLessThanOrEqual(7_000);
   }, 30_000);
 });

@@ -172,7 +172,7 @@ export const normalizeSessionMetadata = (value: unknown): SessionMetadata => {
   const recapStatus = text(source.recapStatus);
   const videoEnabled = bool(source.videoEnabled, false);
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     id: text(source.id),
     eventId: text(source.eventId),
     createdAt,
@@ -208,6 +208,14 @@ export const normalizeSessionMetadata = (value: unknown): SessionMetadata => {
       typeof source.videoDroppedFrames === 'number' && Number.isFinite(source.videoDroppedFrames)
         ? Math.max(0, Math.floor(source.videoDroppedFrames))
         : undefined,
+    videoTimelineFramesPerSecond:
+      typeof source.videoTimelineFramesPerSecond === 'number' && Number.isFinite(source.videoTimelineFramesPerSecond)
+        ? Math.max(1, Math.round(source.videoTimelineFramesPerSecond))
+        : undefined,
+    videoDurationMs:
+      typeof source.videoDurationMs === 'number' && Number.isFinite(source.videoDurationMs)
+        ? Math.max(0, Math.round(source.videoDurationMs))
+        : undefined,
     videoMarkers: Array.isArray(source.videoMarkers)
       ? source.videoMarkers.flatMap((item) => {
           const marker = record(item);
@@ -225,6 +233,12 @@ export const normalizeSessionMetadata = (value: unknown): SessionMetadata => {
       : videoEnabled
         ? 'pending'
         : 'disabled',
+    recapVersion:
+      typeof source.recapVersion === 'number' && Number.isFinite(source.recapVersion)
+        ? Math.max(0, Math.floor(source.recapVersion))
+        : text(source.recapPath)
+          ? 1
+          : 0,
     recapPath: text(source.recapPath) || undefined,
     recapStartedAt: text(source.recapStartedAt) || undefined,
     recapCompletedAt: text(source.recapCompletedAt) || undefined,

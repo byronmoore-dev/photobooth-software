@@ -4,7 +4,7 @@ Production Windows photo booth for attendant-operated three-photo sessions. Came
 
 ## Install
 
-Run `dist\Camera-Booth-Setup-0.17.0.exe`. The installer includes the x64 .NET camera bridge, Canon runtime DLLs, and the session-video encoder, so an event operator does not install either SDK separately.
+Run `dist\Camera-Booth-Setup-0.18.0.exe`. The installer includes the x64 .NET camera bridge, Canon runtime DLLs, and the session-video encoder, so an event operator does not install either SDK separately.
 
 Before opening Camera Booth:
 
@@ -25,7 +25,7 @@ Finished strips appear as a visual grid under **Settings → Sessions**. Select 
 
 Silent session video is opt-in under **Settings → Capture → Record each session**. When enabled, the app records the Canon live view from Start through the third verified photo, including countdowns and flash retries. Full-resolution flash JPEG capture remains unchanged and always takes priority. The encoder consumes a bounded frame queue, so slow encoding drops video frames instead of delaying the camera. Each shutter time is encoded into the raw-video and recap filenames as a video-relative millisecond offset, while `session.json` retains recovery state for the app.
 
-After the printable JPEG is safely created and the print screen can appear, a below-normal-priority background queue generates one recap at a time. The approximately 9-second vertical H.264 recap combines a short live moment around each shutter, each corresponding full-resolution photo reveal, and the finished branded 4 × 6 print as its closing card. Recap failure never affects the print, originals, raw recording, or the next photo session. **Settings → Sessions** shows generation progress and provides Print, Recap, and Full video views with a manual retry when needed.
+After the printable JPEG is safely created and the print screen can appear, a below-normal-priority background queue generates one recap at a time. The vertical H.264 recap retains the entire session recording, accelerates the movement between shots, returns to real time exactly one second before each shutter, reveals each corresponding full-resolution photo, and closes on the finished branded 4 × 6 print. A typical booth session is paced to approximately 13.5 seconds. Recap failure never affects the print, originals, raw recording, or the next photo session. **Settings → Sessions** shows generation progress and provides Print, Recap, and Full video views with a manual retry when needed.
 
 The initial **Editorial Side Rail** design produces a true 4 × 6 inch portrait print at 300 DPI (1200 × 1800 pixels). Its 1-inch information rail occupies the left side. Three edge-to-edge 3 × 2 inch photographs stack vertically on the right. Each design preset supplies its geometry, typography, color, quality, and default headline. Attendants select a complete design instead of configuring those technical values. An optional 300 × 1800 PNG can replace the built-in rail artwork while the preset continues to position the event text.
 

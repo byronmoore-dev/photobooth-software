@@ -10,7 +10,8 @@ internal sealed record VideoRecordingResult(
     int FrameCount,
     int DroppedFrames,
     long FileSize,
-    double FramesPerSecond
+    double FramesPerSecond,
+    int TimelineFramesPerSecond
 );
 
 /// <summary>
@@ -153,7 +154,16 @@ internal sealed class LiveViewVideoRecorder : IDisposable
         var frames = Volatile.Read(ref frameCount);
         var seconds = Math.Max(0.001, (endedAt - startedAt).TotalSeconds);
         var firstFrameAt = new DateTime(Volatile.Read(ref firstFrameTicks), DateTimeKind.Utc);
-        var result = new VideoRecordingResult(startedAt, firstFrameAt, endedAt, frames, Volatile.Read(ref droppedFrames), size, frames / seconds);
+        var result = new VideoRecordingResult(
+            startedAt,
+            firstFrameAt,
+            endedAt,
+            frames,
+            Volatile.Read(ref droppedFrames),
+            size,
+            frames / seconds,
+            targetFramesPerSecond
+        );
 
         lock (stateLock)
         {

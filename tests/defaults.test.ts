@@ -112,10 +112,27 @@ describe('event configuration', () => {
       ],
     });
 
-    expect(migrated.schemaVersion).toBe(4);
+    expect(migrated.schemaVersion).toBe(5);
     expect(migrated.videoStatus).toBe('recording');
     expect(migrated.recapStatus).toBe('pending');
+    expect(migrated.recapVersion).toBe(0);
     expect(migrated.videoMarkers).toEqual([{ index: 0, capturedAt: '2026-08-09T12:00:00.000Z', offsetMs: 1200 }]);
+
+    const priorRecap = normalizeSessionMetadata({
+      id: 'session-2',
+      videoEnabled: true,
+      videoStatus: 'ready',
+      videoTimelineFramesPerSecond: 20,
+      videoDurationMs: 32_550,
+      recapStatus: 'ready',
+      recapPath: 'C:\\Events\\session-recap.mp4',
+    });
+    expect(priorRecap).toMatchObject({
+      schemaVersion: 5,
+      videoTimelineFramesPerSecond: 20,
+      videoDurationMs: 32_550,
+      recapVersion: 1,
+    });
   });
 
   it('requires complete setup and limits it to the configured local day', () => {

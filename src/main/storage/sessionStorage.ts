@@ -35,7 +35,7 @@ export class SessionStorage {
     const now = new Date().toISOString();
     const id = `${test ? 'test-' : ''}${now.replace(/[:.]/g, '-').slice(0, 19)}-${crypto.randomUUID().slice(0, 6)}`;
     const metadata: SessionMetadata = {
-      schemaVersion: 4,
+      schemaVersion: 5,
       id,
       eventId: config.id,
       createdAt: now,
@@ -49,6 +49,7 @@ export class SessionStorage {
       videoStatus: config.capture.sessionVideoEnabled && !test ? 'pending' : 'disabled',
       videoMarkers: [],
       recapStatus: config.capture.sessionVideoEnabled && !test ? 'pending' : 'disabled',
+      recapVersion: 0,
       errors: [],
       test,
     };

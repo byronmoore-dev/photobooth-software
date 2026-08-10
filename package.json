@@ -1,6 +1,6 @@
 {
   "name": "camera-booth",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "private": true,
   "packageManager": "npm@11.19.0",
   "author": "Camera Booth",

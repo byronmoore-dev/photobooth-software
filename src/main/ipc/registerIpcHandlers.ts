@@ -13,7 +13,7 @@ import { renderPhotoLayout } from '../layout/renderPhotoLayout';
 import { WindowsPrinterAdapter } from '../printer/WindowsPrinterAdapter';
 import { UploadQueue } from '../cloud/uploadQueue';
 import { Logger } from '../logging/logger';
-import { generateRecap, RecapQueue } from '../video/recapGenerator';
+import { CURRENT_RECAP_VERSION, generateRecap, RecapQueue } from '../video/recapGenerator';
 import { clampCopies, eventSetupIssues, isEventActive, normalizeLayoutConfig } from '../../shared/defaults';
 import type { EventConfig, LayoutConfig, SessionMetadata } from '../../shared/types';
 
@@ -136,8 +136,11 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
 
   const scheduleRecap = async (config: EventConfig, id: string, force = false) => {
     const metadata = await sessions.get(config, id);
+    const outdated = metadata.recapStatus === 'ready' && metadata.recapVersion < CURRENT_RECAP_VERSION;
     const eligibleStatus =
-      ['pending', 'interrupted'].includes(metadata.recapStatus) || (force && metadata.recapStatus === 'failed');
+      outdated ||
+      ['pending', 'interrupted'].includes(metadata.recapStatus) ||
+      (force && metadata.recapStatus === 'failed');
     if (
       !metadata.videoEnabled ||
       metadata.test ||
@@ -156,7 +159,6 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
         current.recapStatus = 'processing';
         current.recapStartedAt = new Date().toISOString();
         current.recapCompletedAt = undefined;
-        current.recapPath = undefined;
         current.recapDurationMs = undefined;
         return current;
       });
@@ -165,6 +167,12 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
         await rm(temporary, { force: true });
         const current = await sessions.get(config, id);
         const output = sessions.recapPath(config, id, current.videoMarkers);
+        const timelineFramesPerSecond = current.videoTimelineFramesPerSecond ?? 20;
+        const videoDurationMs =
+          current.videoDurationMs ??
+          (current.videoFrameCount
+            ? Math.round((current.videoFrameCount / timelineFramesPerSecond) * 1000)
+            : Math.max(...current.videoMarkers.map((marker) => marker.offsetMs)) + 250);
         const plan = await generateRecap({
           ffmpegPath: bundledFfmpegPath(),
           videoPath: current.videoPath!,
@@ -172,6 +180,7 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
           finalPath: current.finalPath!,
           outputPath: temporary,
           markers: current.videoMarkers,
+          videoDurationMs,
           title: config.description || config.id,
           signal,
         });
@@ -180,6 +189,7 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
         await rename(temporary, output);
         await sessions.update(config, id, (currentMetadata) => {
           currentMetadata.recapStatus = 'ready';
+          currentMetadata.recapVersion = CURRENT_RECAP_VERSION;
           currentMetadata.recapPath = output;
           currentMetadata.recapCompletedAt = new Date().toISOString();
           currentMetadata.recapDurationMs = plan.durationMs;
@@ -306,6 +316,8 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
         current.videoPath = undefined;
         current.videoFrameCount = 0;
         current.videoDroppedFrames = 0;
+        current.videoTimelineFramesPerSecond = undefined;
+        current.videoDurationMs = undefined;
         current.videoMarkers = [];
         return current;
       });
@@ -349,6 +361,8 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
         current.videoEndedAt = result.endedAt;
         current.videoFrameCount = result.frameCount;
         current.videoDroppedFrames = result.droppedFrames;
+        current.videoTimelineFramesPerSecond = result.timelineFramesPerSecond;
+        current.videoDurationMs = Math.round((result.frameCount / result.timelineFramesPerSecond) * 1000);
         current.videoMarkers = adjustedMarkers;
         return current;
       });
@@ -357,6 +371,8 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
         frames: result.frameCount,
         droppedFrames: result.droppedFrames,
         measuredFramesPerSecond: Number(result.framesPerSecond.toFixed(1)),
+        timelineFramesPerSecond: result.timelineFramesPerSecond,
+        durationMs: Math.round((result.frameCount / result.timelineFramesPerSecond) * 1000),
       });
       void scheduleRecap(config, id);
     } catch (error) {

@@ -115,7 +115,7 @@ interface SessionVideoMarker {
 }
 
 export interface SessionMetadata {
-  schemaVersion: 4;
+  schemaVersion: 5;
   id: string;
   eventId: string;
   createdAt: string;
@@ -137,8 +137,11 @@ export interface SessionMetadata {
   videoEndedAt?: string;
   videoFrameCount?: number;
   videoDroppedFrames?: number;
+  videoTimelineFramesPerSecond?: number;
+  videoDurationMs?: number;
   videoMarkers: SessionVideoMarker[];
   recapStatus: SessionRecapStatus;
+  recapVersion: number;
   recapPath?: string;
   recapStartedAt?: string;
   recapCompletedAt?: string;
