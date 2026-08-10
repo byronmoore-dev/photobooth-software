@@ -88,13 +88,21 @@ function Toggle({
   );
 }
 
-function LayoutThumbnail({ preset, selected }: { preset: LayoutConfig['preset']; selected: boolean }) {
+function LayoutThumbnail({
+  preset,
+  selected,
+  compact = false,
+}: {
+  preset: LayoutConfig['preset'];
+  selected: boolean;
+  compact?: boolean;
+}) {
   const rail = selected ? 'bg-[#b8a485]' : 'bg-[#d3c6b3]';
   const photo = selected ? 'bg-stone-50' : 'bg-white/80';
   if (preset === 'side-rail-one-landscape') {
     return (
       <span
-        className="grid aspect-[3/2] w-24 grid-cols-[1fr_5fr] overflow-hidden rounded-xl bg-stone-300"
+        className={`grid aspect-[3/2] grid-cols-[1fr_5fr] overflow-hidden bg-stone-300 ${compact ? 'w-12 rounded-lg' : 'w-24 rounded-xl'}`}
         aria-hidden="true"
       >
         <i className={rail} />
@@ -105,7 +113,7 @@ function LayoutThumbnail({ preset, selected }: { preset: LayoutConfig['preset'];
   if (preset === 'center-rail-two-stack') {
     return (
       <span
-        className="grid aspect-[2/3] h-20 grid-rows-[5fr_2fr_5fr] overflow-hidden rounded-xl bg-stone-300"
+        className={`grid aspect-[2/3] grid-rows-[5fr_2fr_5fr] overflow-hidden bg-stone-300 ${compact ? 'h-12 rounded-lg' : 'h-20 rounded-xl'}`}
         aria-hidden="true"
       >
         <i className={photo} />
@@ -116,7 +124,7 @@ function LayoutThumbnail({ preset, selected }: { preset: LayoutConfig['preset'];
   }
   return (
     <span
-      className="grid aspect-[2/3] h-20 grid-cols-[1fr_3fr] overflow-hidden rounded-xl bg-stone-300"
+      className={`grid aspect-[2/3] grid-cols-[1fr_3fr] overflow-hidden bg-stone-300 ${compact ? 'h-12 rounded-lg' : 'h-20 rounded-xl'}`}
       aria-hidden="true"
     >
       <i className={rail} />
@@ -129,7 +137,15 @@ function LayoutThumbnail({ preset, selected }: { preset: LayoutConfig['preset'];
   );
 }
 
-function LayoutPicker({ layout, onChange }: { layout: LayoutConfig; onChange(layout: LayoutConfig): void }) {
+function LayoutPicker({
+  layout,
+  onChange,
+  compact = false,
+}: {
+  layout: LayoutConfig;
+  onChange(layout: LayoutConfig): void;
+  compact?: boolean;
+}) {
   return (
     <div className="grid gap-3 md:grid-cols-3" role="radiogroup" aria-label="Print layout">
       {LAYOUT_PRESETS.map((preset) => {
@@ -137,19 +153,29 @@ function LayoutPicker({ layout, onChange }: { layout: LayoutConfig; onChange(lay
         return (
           <button
             key={preset.id}
-            className={`relative flex min-h-48 flex-col items-start rounded-[1.5rem] p-5 text-left transition-[background-color,color,transform] active:scale-[0.99] ${selected ? 'bg-stone-900 text-white shadow-[0_18px_45px_rgba(28,25,23,0.16)]' : 'bg-stone-100 text-stone-900 hover:bg-stone-200/80'}`}
+            className={`relative text-left transition-[background-color,color,transform] active:scale-[0.99] ${
+              compact
+                ? `grid min-h-24 grid-cols-[auto_1fr_auto] items-center gap-3 rounded-[1.15rem] px-4 py-3 ${selected ? 'bg-stone-900 text-white shadow-[0_10px_28px_rgba(28,25,23,0.13)]' : 'bg-stone-100 text-stone-900 hover:bg-stone-200/80'}`
+                : `flex min-h-48 flex-col items-start rounded-[1.5rem] p-5 ${selected ? 'bg-stone-900 text-white shadow-[0_18px_45px_rgba(28,25,23,0.16)]' : 'bg-stone-100 text-stone-900 hover:bg-stone-200/80'}`
+            }`}
             type="button"
             role="radio"
             aria-checked={selected}
             onClick={() => onChange(applyLayoutPreset(layout, preset.id))}
           >
-            <LayoutThumbnail preset={preset.id} selected={selected} />
-            <strong className="mt-5 block text-base font-semibold">{preset.name}</strong>
-            <span className={`mt-auto pt-4 text-xs leading-5 ${selected ? 'text-stone-400' : 'text-stone-500'}`}>
-              {preset.photoCount} photo{preset.photoCount === 1 ? '' : 's'} · {preset.printSize}
+            <LayoutThumbnail preset={preset.id} selected={selected} compact={compact} />
+            <span className={compact ? 'min-w-0' : 'contents'}>
+              <strong className={`${compact ? 'block text-sm leading-5' : 'mt-5 block text-base'} font-semibold`}>
+                {preset.name}
+              </strong>
+              <span
+                className={`${compact ? 'mt-1 block text-[0.7rem] leading-4' : 'mt-auto pt-4 text-xs leading-5'} ${selected ? 'text-stone-400' : 'text-stone-500'}`}
+              >
+                {preset.photoCount} photo{preset.photoCount === 1 ? '' : 's'} · {preset.printSize}
+              </span>
             </span>
             <span
-              className={`absolute top-5 right-5 grid size-7 place-items-center rounded-full ${selected ? 'bg-white text-stone-950' : 'bg-white text-transparent'}`}
+              className={`${compact ? 'grid size-6' : 'absolute top-5 right-5 grid size-7'} place-items-center rounded-full ${selected ? 'bg-white text-stone-950' : 'opacity-0'}`}
               aria-hidden="true"
             >
               ✓
@@ -161,8 +187,40 @@ function LayoutPicker({ layout, onChange }: { layout: LayoutConfig; onChange(lay
   );
 }
 
-function RailArtworkControl({ layout, busy, onChoose }: { layout: LayoutConfig; busy: boolean; onChoose(): void }) {
+function RailArtworkControl({
+  layout,
+  busy,
+  onChoose,
+  compact = false,
+}: {
+  layout: LayoutConfig;
+  busy: boolean;
+  onChoose(): void;
+  compact?: boolean;
+}) {
   const preset = getLayoutPreset(layout.preset);
+  if (compact) {
+    return (
+      <div className="flex min-h-20 flex-wrap items-center justify-between gap-3 rounded-[1.15rem] bg-stone-100 px-4 py-3">
+        <div className="min-w-0">
+          <strong className="block text-sm font-semibold">Rail artwork</strong>
+          <span
+            className={`mt-1 block truncate text-xs ${layout.railImageAssetId ? 'text-stone-500' : 'text-[#8a5d43]'}`}
+          >
+            {layout.railImageName || `${preset.artworkSize} PNG required`}
+          </span>
+        </div>
+        <button
+          className="min-h-12 rounded-xl bg-white px-4 text-sm font-semibold text-stone-800 shadow-sm transition-[background-color,transform] hover:bg-stone-50 active:scale-[0.98] disabled:opacity-45"
+          type="button"
+          disabled={busy}
+          onClick={onChoose}
+        >
+          {busy ? 'Importing…' : layout.railImageAssetId ? 'Replace' : 'Add artwork'}
+        </button>
+      </div>
+    );
+  }
   return (
     <div className={`rounded-[1.5rem] p-5 ${layout.railImageAssetId ? 'bg-stone-100' : 'bg-[#f5eee5]'}`}>
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -748,20 +806,17 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                       </button>
                     </div>
                   </Field>
-                  <div className="mt-3 grid gap-5 md:col-span-2">
-                    <div>
-                      <h4 className="text-xl font-semibold tracking-[-0.03em]">Print Layout</h4>
-                      <p className="mt-2 text-sm leading-6 text-stone-500">
-                        This choice controls how many photos the booth takes in every session.
-                      </p>
-                    </div>
+                  <div className="mt-2 grid gap-3 md:col-span-2">
+                    <h4 className="text-base font-semibold tracking-[-0.02em]">Print layout</h4>
                     <LayoutPicker
                       layout={newEventDraft.layout}
                       onChange={(layout) => patchNewEvent('layout', layout)}
+                      compact
                     />
                     <RailArtworkControl
                       layout={newEventDraft.layout}
                       busy={busy === 'rail-artwork'}
+                      compact
                       onChoose={() =>
                         void chooseRailArtwork(
                           newEventDraft.layout,
