@@ -13,6 +13,7 @@ import { renderPhotoLayout } from '../layout/renderPhotoLayout';
 import { WindowsPrinterAdapter } from '../printer/WindowsPrinterAdapter';
 import { UploadQueue } from '../cloud/uploadQueue';
 import { Logger } from '../logging/logger';
+import { generateRecap, RecapQueue } from '../video/recapGenerator';
 import { clampCopies, eventSetupIssues, isEventActive, normalizeLayoutConfig } from '../../shared/defaults';
 import type { EventConfig, LayoutConfig, SessionMetadata } from '../../shared/types';
 
@@ -45,6 +46,7 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
   const sessions = new SessionStorage(events);
   const printer = new WindowsPrinterAdapter(owner);
   const uploads = new UploadQueue(sessions);
+  const recaps = new RecapQueue();
   const previewRoot = path.join(app.getPath('temp'), 'camera-booth-preview');
   const layoutAssetRoot = path.join(app.getPath('userData'), 'layout-assets');
   let camera: CameraAdapter | null = null;
@@ -56,12 +58,15 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
       const id = decodeURIComponent(url.pathname.replace(/^\//, ''));
       const config = await events.load();
       const metadata = await sessions.get(config, id);
-      const expected = path.resolve(sessions.videoPath(config, id));
-      if (metadata.videoStatus !== 'ready' || !metadata.videoPath || path.resolve(metadata.videoPath) !== expected) {
+      const recap = url.searchParams.get('asset') === 'recap';
+      const available = recap
+        ? metadata.recapStatus === 'ready' && metadata.recapPath
+        : metadata.videoStatus === 'ready' && metadata.videoPath;
+      if (!available || !sessions.isManagedVideoPath(config, id, available, recap ? 'recap' : 'raw')) {
         return new Response('Not found', { status: 404 });
       }
-      await validateMp4(expected);
-      return net.fetch(pathToFileURL(expected).toString(), { headers: request.headers });
+      await validateMp4(available);
+      return net.fetch(pathToFileURL(available).toString(), { headers: request.headers });
     } catch {
       return new Response('Not found', { status: 404 });
     }
@@ -127,6 +132,72 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
     await rm(output, { force: true });
     await rename(temporary, output);
     return output;
+  };
+
+  const scheduleRecap = async (config: EventConfig, id: string, force = false) => {
+    const metadata = await sessions.get(config, id);
+    const eligibleStatus =
+      ['pending', 'interrupted'].includes(metadata.recapStatus) || (force && metadata.recapStatus === 'failed');
+    if (
+      !metadata.videoEnabled ||
+      metadata.test ||
+      !eligibleStatus ||
+      metadata.videoStatus !== 'ready' ||
+      !metadata.videoPath ||
+      !metadata.finalPath ||
+      metadata.originalPaths.filter(Boolean).length !== 3 ||
+      metadata.videoMarkers.length !== 3
+    ) {
+      return false;
+    }
+    return recaps.enqueue(id, async (signal) => {
+      const temporary = sessions.temporaryRecapPath(config, id);
+      await sessions.update(config, id, (current) => {
+        current.recapStatus = 'processing';
+        current.recapStartedAt = new Date().toISOString();
+        current.recapCompletedAt = undefined;
+        current.recapPath = undefined;
+        current.recapDurationMs = undefined;
+        return current;
+      });
+      logger.info('Session recap started', { sessionId: id });
+      try {
+        await rm(temporary, { force: true });
+        const current = await sessions.get(config, id);
+        const output = sessions.recapPath(config, id, current.videoMarkers);
+        const plan = await generateRecap({
+          ffmpegPath: bundledFfmpegPath(),
+          videoPath: current.videoPath!,
+          originalPaths: current.originalPaths,
+          finalPath: current.finalPath!,
+          outputPath: temporary,
+          markers: current.videoMarkers,
+          title: config.description || config.id,
+          signal,
+        });
+        await validateMp4(temporary);
+        await rm(output, { force: true });
+        await rename(temporary, output);
+        await sessions.update(config, id, (currentMetadata) => {
+          currentMetadata.recapStatus = 'ready';
+          currentMetadata.recapPath = output;
+          currentMetadata.recapCompletedAt = new Date().toISOString();
+          currentMetadata.recapDurationMs = plan.durationMs;
+          return currentMetadata;
+        });
+        logger.info('Session recap completed', { sessionId: id, durationMs: plan.durationMs });
+      } catch (error) {
+        await rm(temporary, { force: true });
+        const interrupted = signal.aborted;
+        const message = error instanceof Error ? error.message : String(error);
+        await sessions.update(config, id, (current) => {
+          current.recapStatus = interrupted ? 'interrupted' : 'failed';
+          current.errors.push({ at: new Date().toISOString(), step: 'recap', message });
+          return current;
+        });
+        logger.warn(interrupted ? 'Session recap interrupted' : 'Session recap failed', { sessionId: id, message });
+      }
+    });
   };
 
   const managedImagePath = (config: EventConfig, input: string) => {
@@ -243,6 +314,7 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
       const message = error instanceof Error ? error.message : String(error);
       metadata = await sessions.update(config, id, (current) => {
         current.videoStatus = 'failed';
+        current.recapStatus = 'failed';
         current.errors.push({ at: new Date().toISOString(), step: 'video-start', message });
         return current;
       });
@@ -259,9 +331,14 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
       return current;
     });
     const partial = sessions.temporaryVideoPath(config, id);
-    const output = sessions.videoPath(config, id);
     try {
       const result = await (await getCamera()).stopRecording();
+      const firstFrameOffset = Math.max(0, Date.parse(result.firstFrameAt) - Date.parse(result.startedAt));
+      const adjustedMarkers = metadata.videoMarkers.map((marker) => ({
+        ...marker,
+        offsetMs: Math.max(0, marker.offsetMs - firstFrameOffset),
+      }));
+      const output = sessions.videoPath(config, id, adjustedMarkers);
       await validateMp4(partial);
       await rm(output, { force: true });
       await rename(partial, output);
@@ -272,6 +349,7 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
         current.videoEndedAt = result.endedAt;
         current.videoFrameCount = result.frameCount;
         current.videoDroppedFrames = result.droppedFrames;
+        current.videoMarkers = adjustedMarkers;
         return current;
       });
       logger.info('Session video finalized', {
@@ -280,6 +358,7 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
         droppedFrames: result.droppedFrames,
         measuredFramesPerSecond: Number(result.framesPerSecond.toFixed(1)),
       });
+      void scheduleRecap(config, id);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const interrupted = sessions.interruptedVideoPath(config, id);
@@ -293,12 +372,26 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
       }
       metadata = await sessions.update(config, id, (current) => {
         current.videoStatus = 'failed';
+        current.recapStatus = 'failed';
         current.videoEndedAt = new Date().toISOString();
         current.errors.push({ at: new Date().toISOString(), step: 'video-stop', message });
         return current;
       });
       logger.warn('Session video could not be finalized; photos were preserved', { sessionId: id, message });
     }
+    return sessions.view(config, metadata);
+  });
+  channel('session:retryRecap', async (id: string) => {
+    const config = await events.load();
+    let metadata = await sessions.get(config, id);
+    if (metadata.videoStatus !== 'ready' || !metadata.finalPath) {
+      throw new Error('The full session video and print must be ready before creating a recap');
+    }
+    metadata = await sessions.update(config, id, (current) => {
+      current.recapStatus = 'pending';
+      return current;
+    });
+    await scheduleRecap(config, id, true);
     return sessions.view(config, metadata);
   });
   channel('session:render', async (id: string) => {
@@ -318,6 +411,7 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
       });
       if (metadata.uploadEnabled) void uploads.enqueue(config, metadata);
       logger.info('Final layout rendered', { sessionId: id });
+      void scheduleRecap(config, id);
       return sessions.view(config, metadata);
     } catch (error) {
       await sessions.update(config, id, (current) => {
@@ -341,6 +435,7 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
     if (!config.id) return { recovered: 0, interrupted: 0, pendingUploads: 0 };
     const summary = await sessions.recover(config, validateJpeg, (metadata) => renderFinal(config, metadata));
     void uploads.retryPending(config);
+    for (const metadata of await sessions.all(config)) void scheduleRecap(config, metadata.id);
     logger.info('Startup recovery completed', summary);
     return summary;
   });
@@ -594,6 +689,7 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
   channel('system:logs', () => logger.readRecent());
 
   return async () => {
+    recaps.dispose();
     protocol.unhandle('camera-booth-video');
     if (camera) await camera.disconnect();
   };

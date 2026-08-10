@@ -6,6 +6,7 @@ export interface VideoRecordingStart {
 
 export interface VideoRecordingResult {
   startedAt: string;
+  firstFrameAt: string;
   endedAt: string;
   frameCount: number;
   droppedFrames: number;

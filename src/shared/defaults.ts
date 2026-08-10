@@ -168,8 +168,11 @@ export const normalizeSessionMetadata = (value: unknown): SessionMetadata => {
   const createdAt = text(source.createdAt, new Date().toISOString());
   const videoStatuses = new Set(['disabled', 'pending', 'recording', 'processing', 'ready', 'failed', 'interrupted']);
   const videoStatus = text(source.videoStatus);
+  const recapStatuses = new Set(['disabled', 'pending', 'processing', 'ready', 'failed', 'interrupted']);
+  const recapStatus = text(source.recapStatus);
+  const videoEnabled = bool(source.videoEnabled, false);
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     id: text(source.id),
     eventId: text(source.eventId),
     createdAt,
@@ -188,7 +191,7 @@ export const normalizeSessionMetadata = (value: unknown): SessionMetadata => {
       : [],
     remoteSessionId: text(source.remoteSessionId) || undefined,
     qrUrl: text(source.qrUrl) || undefined,
-    videoEnabled: bool(source.videoEnabled, false),
+    videoEnabled,
     videoStatus: videoStatuses.has(videoStatus)
       ? (videoStatus as SessionMetadata['videoStatus'])
       : bool(source.videoEnabled, false)
@@ -217,6 +220,18 @@ export const normalizeSessionMetadata = (value: unknown): SessionMetadata => {
           return index >= 0 && capturedAt && offsetMs >= 0 ? [{ index, capturedAt, offsetMs }] : [];
         })
       : [],
+    recapStatus: recapStatuses.has(recapStatus)
+      ? (recapStatus as SessionMetadata['recapStatus'])
+      : videoEnabled
+        ? 'pending'
+        : 'disabled',
+    recapPath: text(source.recapPath) || undefined,
+    recapStartedAt: text(source.recapStartedAt) || undefined,
+    recapCompletedAt: text(source.recapCompletedAt) || undefined,
+    recapDurationMs:
+      typeof source.recapDurationMs === 'number' && Number.isFinite(source.recapDurationMs)
+        ? Math.max(0, Math.round(source.recapDurationMs))
+        : undefined,
     errors: Array.isArray(source.errors)
       ? (source.errors.filter((item) => item && typeof item === 'object') as SessionMetadata['errors'])
       : [],

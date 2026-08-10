@@ -142,6 +142,38 @@ describe('session storage and recovery', () => {
     await writeFile(session.videoPath, Buffer.alloc(128, 2));
 
     const summary = await storage.summary(session);
-    expect(summary.videoUrl).toBe(`camera-booth-video://session/${session.id}`);
+    expect(summary.videoUrl).toBe(`camera-booth-video://session/${session.id}?asset=raw`);
+  });
+
+  it('marks an interrupted recap for background regeneration', async () => {
+    const { config, storage } = await fixture();
+    const session = await storage.create(config);
+    session.recapStatus = 'processing';
+    await writeFile(storage.temporaryRecapPath(config, session.id), Buffer.alloc(128, 3));
+    await storage.save(config, session);
+
+    await storage.recover(config, validateJpeg, async () => {
+      throw new Error('should not render');
+    });
+
+    await expect(storage.get(config, session.id)).resolves.toMatchObject({ recapStatus: 'interrupted' });
+    await expect(access(storage.temporaryRecapPath(config, session.id))).rejects.toThrow();
+  });
+
+  it('uses self-describing shutter offsets in generated media names', async () => {
+    const { config, storage } = await fixture();
+    const session = await storage.create(config);
+    const markers = [
+      { index: 0, capturedAt: session.createdAt, offsetMs: 8421 },
+      { index: 1, capturedAt: session.createdAt, offsetMs: 19734 },
+      { index: 2, capturedAt: session.createdAt, offsetMs: 31062 },
+    ];
+
+    expect(path.basename(storage.videoPath(config, session.id, markers))).toBe(
+      'session-video__shots-008421ms-019734ms-031062ms.mp4',
+    );
+    expect(path.basename(storage.recapPath(config, session.id, markers))).toBe(
+      'session-recap__shots-008421ms-019734ms-031062ms.mp4',
+    );
   });
 });

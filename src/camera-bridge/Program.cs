@@ -250,6 +250,7 @@ internal sealed class CameraHost : IDisposable
         Respond(command.Id, new
         {
             startedAt = result.StartedAt,
+            firstFrameAt = result.FirstFrameAt,
             endedAt = result.EndedAt,
             frameCount = result.FrameCount,
             droppedFrames = result.DroppedFrames,

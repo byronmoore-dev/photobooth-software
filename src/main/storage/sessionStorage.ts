@@ -6,6 +6,12 @@ import { atomicWriteJson, readJsonWithBackup } from './atomicFile';
 import { EventStorage } from './eventStorage';
 
 const SESSION_ID = /^(?:test-)?[A-Za-z0-9-]{12,80}$/;
+const markerSuffix = (markers: SessionMetadata['videoMarkers']) => {
+  const offsets = [...markers]
+    .sort((left, right) => left.index - right.index)
+    .map((marker) => `${String(Math.max(0, Math.round(marker.offsetMs))).padStart(6, '0')}ms`);
+  return offsets.length === 3 ? `__shots-${offsets.join('-')}` : '';
+};
 
 export class SessionStorage {
   private readonly locks = new Map<string, Promise<void>>();
@@ -29,7 +35,7 @@ export class SessionStorage {
     const now = new Date().toISOString();
     const id = `${test ? 'test-' : ''}${now.replace(/[:.]/g, '-').slice(0, 19)}-${crypto.randomUUID().slice(0, 6)}`;
     const metadata: SessionMetadata = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       id,
       eventId: config.id,
       createdAt: now,
@@ -42,6 +48,7 @@ export class SessionStorage {
       videoEnabled: config.capture.sessionVideoEnabled && !test,
       videoStatus: config.capture.sessionVideoEnabled && !test ? 'pending' : 'disabled',
       videoMarkers: [],
+      recapStatus: config.capture.sessionVideoEnabled && !test ? 'pending' : 'disabled',
       errors: [],
       test,
     };
@@ -66,8 +73,8 @@ export class SessionStorage {
     return `${this.finalPath(config, id)}.part`;
   }
 
-  videoPath(config: EventConfig, id: string) {
-    return path.join(this.folder(config, id), 'session-video.mp4');
+  videoPath(config: EventConfig, id: string, markers: SessionMetadata['videoMarkers'] = []) {
+    return path.join(this.folder(config, id), `session-video${markerSuffix(markers)}.mp4`);
   }
 
   temporaryVideoPath(config: EventConfig, id: string) {
@@ -76,6 +83,23 @@ export class SessionStorage {
 
   interruptedVideoPath(config: EventConfig, id: string) {
     return path.join(this.folder(config, id), 'session-video.interrupted.mp4');
+  }
+
+  recapPath(config: EventConfig, id: string, markers: SessionMetadata['videoMarkers'] = []) {
+    return path.join(this.folder(config, id), `session-recap${markerSuffix(markers)}.mp4`);
+  }
+
+  temporaryRecapPath(config: EventConfig, id: string) {
+    return path.join(this.folder(config, id), 'session-recap.partial.mp4');
+  }
+
+  isManagedVideoPath(config: EventConfig, id: string, file: string, asset: 'raw' | 'recap') {
+    const candidate = path.resolve(file);
+    if (path.dirname(candidate) !== path.resolve(this.folder(config, id))) return false;
+    const prefix = asset === 'raw' ? 'session-video' : 'session-recap';
+    return new RegExp(`^${prefix}(?:__shots-\\d{6,}ms-\\d{6,}ms-\\d{6,}ms)?\\.mp4$`, 'i').test(
+      path.basename(candidate),
+    );
   }
 
   async save(config: EventConfig, input: SessionMetadata) {
@@ -123,11 +147,13 @@ export class SessionStorage {
       originalDataUrls: originals.filter((item): item is string => Boolean(item)),
       finalDataUrl: await toData(metadata.finalPath),
       videoUrl: metadata.videoStatus === 'ready' && metadata.videoPath ? this.videoUrl(metadata.id) : undefined,
+      recapUrl:
+        metadata.recapStatus === 'ready' && metadata.recapPath ? this.videoUrl(metadata.id, 'recap') : undefined,
     };
   }
 
-  videoUrl(id: string) {
-    return `camera-booth-video://session/${encodeURIComponent(this.assertId(id))}`;
+  videoUrl(id: string, asset: 'raw' | 'recap' = 'raw') {
+    return `camera-booth-video://session/${encodeURIComponent(this.assertId(id))}?asset=${asset}`;
   }
 
   async summary(metadata: SessionMetadata): Promise<SessionSummary> {
@@ -143,6 +169,8 @@ export class SessionStorage {
       ...metadata,
       finalDataUrl,
       videoUrl: metadata.videoStatus === 'ready' && metadata.videoPath ? this.videoUrl(metadata.id) : undefined,
+      recapUrl:
+        metadata.recapStatus === 'ready' && metadata.recapPath ? this.videoUrl(metadata.id, 'recap') : undefined,
     };
   }
 
@@ -185,7 +213,25 @@ export class SessionStorage {
       await Promise.all([
         ...[0, 1, 2].map((index) => rm(this.temporaryOriginalPath(config, metadata.id, index), { force: true })),
         rm(this.temporaryFinalPath(config, metadata.id), { force: true }),
+        rm(this.temporaryRecapPath(config, metadata.id), { force: true }),
       ]);
+      if (metadata.recapStatus === 'processing') {
+        metadata.recapStatus = 'interrupted';
+        metadata.errors.push({
+          at: new Date().toISOString(),
+          step: 'recap-recovery',
+          message: 'Recap generation was interrupted and will be retried in the background.',
+        });
+        changed = true;
+      } else if (metadata.recapStatus === 'ready') {
+        try {
+          if (!metadata.recapPath || (await stat(metadata.recapPath)).size === 0) throw new Error('Missing recap');
+        } catch {
+          metadata.recapStatus = 'interrupted';
+          metadata.recapPath = undefined;
+          changed = true;
+        }
+      }
       if (['recording', 'processing'].includes(metadata.videoStatus)) {
         const partial = this.temporaryVideoPath(config, metadata.id);
         const interrupted = this.interruptedVideoPath(config, metadata.id);

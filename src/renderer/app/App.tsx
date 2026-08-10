@@ -174,9 +174,13 @@ export function App() {
         setState('PHOTO_PREVIEW');
         if (index === 2) {
           const video = window.booth.session.stopVideo(current.id);
-          await Promise.all([window.booth.session.render(current.id), video, wait(config.capture.previewMs)]);
-          setSession(await window.booth.session.get(current.id));
+          const [rendered] = await Promise.all([
+            window.booth.session.render(current.id),
+            wait(config.capture.previewMs),
+          ]);
+          setSession(rendered);
           setState('RESULT');
+          void video.catch(() => undefined);
           return;
         }
         await wait(config.capture.previewMs);

@@ -106,6 +106,7 @@ interface SessionError {
 }
 
 type SessionVideoStatus = 'disabled' | 'pending' | 'recording' | 'processing' | 'ready' | 'failed' | 'interrupted';
+type SessionRecapStatus = 'disabled' | 'pending' | 'processing' | 'ready' | 'failed' | 'interrupted';
 
 interface SessionVideoMarker {
   index: number;
@@ -114,7 +115,7 @@ interface SessionVideoMarker {
 }
 
 export interface SessionMetadata {
-  schemaVersion: 3;
+  schemaVersion: 4;
   id: string;
   eventId: string;
   createdAt: string;
@@ -137,6 +138,11 @@ export interface SessionMetadata {
   videoFrameCount?: number;
   videoDroppedFrames?: number;
   videoMarkers: SessionVideoMarker[];
+  recapStatus: SessionRecapStatus;
+  recapPath?: string;
+  recapStartedAt?: string;
+  recapCompletedAt?: string;
+  recapDurationMs?: number;
   errors: SessionError[];
   test?: boolean;
 }
@@ -145,11 +151,13 @@ export interface SessionView extends SessionMetadata {
   originalDataUrls: string[];
   finalDataUrl?: string;
   videoUrl?: string;
+  recapUrl?: string;
 }
 
 export interface SessionSummary extends SessionMetadata {
   finalDataUrl?: string;
   videoUrl?: string;
+  recapUrl?: string;
 }
 
 export interface RecoverySummary {
@@ -193,6 +201,7 @@ export interface BoothApi {
     get(id: string): Promise<SessionView>;
     startVideo(id: string): Promise<SessionView>;
     stopVideo(id: string): Promise<SessionView>;
+    retryRecap(id: string): Promise<SessionView>;
     render(id: string): Promise<SessionView>;
     recent(): Promise<SessionSummary[]>;
     recover(): Promise<RecoverySummary>;

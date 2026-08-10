@@ -5,6 +5,7 @@ namespace CanonCameraBridge;
 
 internal sealed record VideoRecordingResult(
     DateTime StartedAt,
+    DateTime FirstFrameAt,
     DateTime EndedAt,
     int FrameCount,
     int DroppedFrames,
@@ -33,6 +34,7 @@ internal sealed class LiveViewVideoRecorder : IDisposable
     private int frameCount;
     private int droppedFrames;
     private int targetFramesPerSecond;
+    private long firstFrameTicks;
 
     public bool IsRecording { get { lock (stateLock) return process != null; } }
 
@@ -53,6 +55,7 @@ internal sealed class LiveViewVideoRecorder : IDisposable
             latestFrame = null;
             frameCount = 0;
             droppedFrames = 0;
+            firstFrameTicks = 0;
 
             var startInfo = new ProcessStartInfo
             {
@@ -100,6 +103,7 @@ internal sealed class LiveViewVideoRecorder : IDisposable
                 var frame = Volatile.Read(ref latestFrame);
                 if (frame == null) continue;
                 if (!queue.TryAdd(frame)) Interlocked.Increment(ref droppedFrames);
+                else Interlocked.CompareExchange(ref firstFrameTicks, DateTime.UtcNow.Ticks, 0);
             }
         }
         catch (OperationCanceledException) { }
@@ -148,7 +152,8 @@ internal sealed class LiveViewVideoRecorder : IDisposable
         var size = File.Exists(outputPath) ? new FileInfo(outputPath).Length : 0;
         var frames = Volatile.Read(ref frameCount);
         var seconds = Math.Max(0.001, (endedAt - startedAt).TotalSeconds);
-        var result = new VideoRecordingResult(startedAt, endedAt, frames, Volatile.Read(ref droppedFrames), size, frames / seconds);
+        var firstFrameAt = new DateTime(Volatile.Read(ref firstFrameTicks), DateTimeKind.Utc);
+        var result = new VideoRecordingResult(startedAt, firstFrameAt, endedAt, frames, Volatile.Read(ref droppedFrames), size, frames / seconds);
 
         lock (stateLock)
         {

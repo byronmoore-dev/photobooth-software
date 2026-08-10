@@ -130,7 +130,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
   const [checks, setChecks] = useState<DiagnosticsResult[]>([]);
   const [recent, setRecent] = useState<SessionSummary[]>([]);
   const [selectedSession, setSelectedSession] = useState<SessionSummary | null>(null);
-  const [sessionMedia, setSessionMedia] = useState<'print' | 'video'>('print');
+  const [sessionMedia, setSessionMedia] = useState<'print' | 'recap' | 'raw'>('print');
   const [reprintCopies, setReprintCopies] = useState(1);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [logLevel, setLogLevel] = useState<'all' | LogEntry['level']>('all');
@@ -185,6 +185,27 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
     const timer = window.setInterval(() => void refreshLogs(), 10_000);
     return () => window.clearInterval(timer);
   }, [tab]);
+
+  useEffect(() => {
+    if (tab !== 'Sessions' || !isEventActive(draft)) return;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const latest = await window.booth.session.recent();
+        if (!active) return;
+        setRecent(latest);
+        setSelectedSession((current) => (current ? (latest.find((item) => item.id === current.id) ?? current) : null));
+      } catch {
+        // Keep the existing session cards visible through a transient read failure.
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 2_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [draft, tab]);
 
   const patch = <Key extends keyof EventConfig>(key: Key, value: EventConfig[Key]) => {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -258,7 +279,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
       window.removeEventListener('keydown', onKeyDown);
       previousFocus?.focus();
     };
-  }, [selectedSession]);
+  }, [selectedSession?.id]);
 
   useEffect(() => {
     if (!confirmNewEvent) return;
@@ -421,6 +442,12 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
   const visibleLogs = logs.filter((entry) => logLevel === 'all' || entry.level === logLevel).slice(0, 50);
   const setupReady = isEventActive(draft);
   const completedSessions = setupReady ? recent.filter((item) => item.finalDataUrl) : [];
+  const selectedPlaybackUrl =
+    sessionMedia === 'recap'
+      ? selectedSession?.recapUrl
+      : sessionMedia === 'raw'
+        ? selectedSession?.videoUrl
+        : undefined;
   const draftIssues = newEventDraft ? eventDraftIssues(newEventDraft) : [];
   return (
     <main className="grid h-full grid-cols-[17rem_minmax(0,1fr)] overflow-x-hidden bg-stone-100 text-stone-900">
@@ -717,7 +744,9 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                       key={item.id}
                       onClick={() => {
                         setReprintCopies(draft.printer.defaultCopies);
-                        setSessionMedia('print');
+                        setSessionMedia(
+                          item.recapStatus !== 'disabled' && item.videoStatus === 'ready' ? 'recap' : 'print',
+                        );
                         setSelectedSession(item);
                       }}
                     >
@@ -730,10 +759,10 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                           height={1800}
                           loading="lazy"
                         />
-                        {item.videoUrl ? (
+                        {item.recapUrl || item.videoUrl ? (
                           <span
                             className="absolute right-3 bottom-3 grid size-11 place-items-center rounded-full bg-stone-950/80 text-white shadow-lg backdrop-blur-sm"
-                            aria-label="Video available"
+                            aria-label={item.recapUrl ? 'Recap available' : 'Full session video available'}
                           >
                             <svg className="ml-0.5 size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                               <path d="M8 5.7v12.6a1 1 0 0 0 1.55.84l9.1-6.3a1 1 0 0 0 0-1.68l-9.1-6.3A1 1 0 0 0 8 5.7Z" />
@@ -745,7 +774,16 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                         <time className="block truncate text-sm font-semibold" dateTime={item.createdAt}>
                           {sessionDate.format(new Date(item.createdAt))}
                         </time>
-                        {item.videoUrl ? <span className="text-xs font-medium text-stone-500">Video</span> : null}
+                        {item.recapUrl ? (
+                          <span className="text-xs font-medium text-stone-500">Recap</span>
+                        ) : ['pending', 'processing', 'interrupted'].includes(item.recapStatus) && item.videoUrl ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500">
+                            <span className="size-1.5 animate-pulse rounded-full bg-[#9a7c55]" aria-hidden="true" />
+                            Creating recap
+                          </span>
+                        ) : item.videoUrl ? (
+                          <span className="text-xs font-medium text-stone-500">Full video</span>
+                        ) : null}
                       </span>
                     </button>
                   ))}
@@ -1351,17 +1389,49 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
             onKeyDown={trapDialogFocus}
           >
             <div className="grid min-h-0 place-items-center overflow-hidden rounded-[2rem] bg-stone-200 p-6">
-              {sessionMedia === 'video' && selectedSession.videoUrl ? (
+              {selectedPlaybackUrl ? (
                 <video
                   className="max-h-[70vh] max-w-full rounded-2xl bg-black shadow-xl"
-                  src={selectedSession.videoUrl}
+                  key={selectedPlaybackUrl}
+                  src={selectedPlaybackUrl}
                   poster={selectedSession.finalDataUrl}
                   controls
                   autoPlay
                   playsInline
                   preload="metadata"
-                  aria-label={`Session video from ${sessionDate.format(new Date(selectedSession.createdAt))}`}
+                  aria-label={`${sessionMedia === 'recap' ? 'Session recap' : 'Full session video'} from ${sessionDate.format(new Date(selectedSession.createdAt))}`}
                 />
+              ) : sessionMedia === 'recap' ? (
+                <div className="max-w-xs text-center" aria-live="polite">
+                  <span className="mx-auto grid size-16 place-items-center rounded-full bg-white shadow-sm">
+                    {selectedSession.recapStatus === 'failed' ? (
+                      <svg
+                        className="size-6 text-stone-500"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 8v5m0 3.5v.01" strokeLinecap="round" />
+                        <circle cx="12" cy="12" r="9" />
+                      </svg>
+                    ) : (
+                      <span
+                        className="size-6 animate-spin rounded-full border-2 border-stone-300 border-t-stone-900"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </span>
+                  <strong className="mt-5 block text-lg font-semibold">
+                    {selectedSession.recapStatus === 'failed' ? 'Recap needs another try' : 'Creating your recap'}
+                  </strong>
+                  <p className="mt-2 text-sm leading-6 text-stone-500">
+                    {selectedSession.recapStatus === 'failed'
+                      ? 'The print and full recording are safe.'
+                      : 'Printing and new photo sessions can continue while this finishes.'}
+                  </p>
+                </div>
               ) : (
                 <img
                   className="max-h-[70vh] max-w-full rounded-2xl object-contain shadow-xl"
@@ -1398,25 +1468,59 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                 <time className="mt-2 block text-sm text-stone-500" dateTime={selectedSession.createdAt}>
                   {sessionDate.format(new Date(selectedSession.createdAt))}
                 </time>
-                {selectedSession.videoUrl ? (
-                  <div className="mt-7 grid grid-cols-2 rounded-2xl bg-stone-200/80 p-1" aria-label="Session media">
+                {selectedSession.videoUrl || selectedSession.recapStatus !== 'disabled' ? (
+                  <div className="mt-7 flex rounded-2xl bg-stone-200/80 p-1" aria-label="Session media">
                     <button
-                      className={`min-h-11 rounded-xl text-sm font-semibold transition-colors ${sessionMedia === 'print' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
+                      className={`min-h-11 flex-1 rounded-xl px-3 text-sm font-semibold transition-colors ${sessionMedia === 'print' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
                       type="button"
                       aria-pressed={sessionMedia === 'print'}
                       onClick={() => setSessionMedia('print')}
                     >
                       Print
                     </button>
-                    <button
-                      className={`min-h-11 rounded-xl text-sm font-semibold transition-colors ${sessionMedia === 'video' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
-                      type="button"
-                      aria-pressed={sessionMedia === 'video'}
-                      onClick={() => setSessionMedia('video')}
-                    >
-                      Video
-                    </button>
+                    {selectedSession.recapStatus !== 'disabled' ? (
+                      <button
+                        className={`min-h-11 flex-1 rounded-xl px-3 text-sm font-semibold transition-colors ${sessionMedia === 'recap' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
+                        type="button"
+                        aria-pressed={sessionMedia === 'recap'}
+                        onClick={() => setSessionMedia('recap')}
+                      >
+                        Recap
+                      </button>
+                    ) : null}
+                    {selectedSession.videoUrl ? (
+                      <button
+                        className={`min-h-11 flex-1 rounded-xl px-3 text-sm font-semibold transition-colors ${sessionMedia === 'raw' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
+                        type="button"
+                        aria-pressed={sessionMedia === 'raw'}
+                        onClick={() => setSessionMedia('raw')}
+                      >
+                        Full video
+                      </button>
+                    ) : null}
                   </div>
+                ) : null}
+                {['failed', 'interrupted'].includes(selectedSession.recapStatus) && selectedSession.videoUrl ? (
+                  <button
+                    className={`${quietActionClass} mt-3 w-full`}
+                    type="button"
+                    disabled={busy === `recap-${selectedSession.id}`}
+                    onClick={() =>
+                      void withFeedback(
+                        `recap-${selectedSession.id}`,
+                        () => window.booth.session.retryRecap(selectedSession.id),
+                        'Recap queued.',
+                      ).then(async (queued) => {
+                        if (!queued) return;
+                        const latest = await window.booth.session.recent();
+                        setRecent(latest);
+                        setSelectedSession(latest.find((item) => item.id === selectedSession.id) ?? selectedSession);
+                        setSessionMedia('recap');
+                      })
+                    }
+                  >
+                    {busy === `recap-${selectedSession.id}` ? 'Starting…' : 'Create Recap Again'}
+                  </button>
                 ) : null}
                 <div className="mt-8">
                   <PrintQuantity value={reprintCopies} max={draft.printer.maxCopies} onChange={setReprintCopies} />

@@ -112,8 +112,9 @@ describe('event configuration', () => {
       ],
     });
 
-    expect(migrated.schemaVersion).toBe(3);
+    expect(migrated.schemaVersion).toBe(4);
     expect(migrated.videoStatus).toBe('recording');
+    expect(migrated.recapStatus).toBe('pending');
     expect(migrated.videoMarkers).toEqual([{ index: 0, capturedAt: '2026-08-09T12:00:00.000Z', offsetMs: 1200 }]);
   });
 
