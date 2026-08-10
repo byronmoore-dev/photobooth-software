@@ -4,7 +4,7 @@ Production Windows photo booth for attendant-operated three-photo sessions. Came
 
 ## Install
 
-Run `dist\Camera-Booth-Setup-0.18.1.exe`. The installer includes the x64 .NET camera bridge, Canon runtime DLLs, and the session-video encoder, so an event operator does not install either SDK separately.
+Run `dist\Camera-Booth-Setup-0.19.0.exe`. The installer includes the x64 .NET camera bridge, Canon runtime DLLs, and the session-video encoder, so an event operator does not install either SDK separately.
 
 Before opening Camera Booth:
 
@@ -17,7 +17,7 @@ The T6i's installed firmware 1.0.0 can remain as-is. Camera Booth does not updat
 
 The app begins Canon's autofocus-and-capture operation 500 ms before the last countdown tick finishes. The bridge holds autofocus for 450 ms, then sends the shutter request just before visual zero to compensate for the T6i's physical shutter and pre-flash latency. Every downloaded JPEG is checked for Canon's flash-fired EXIF bit; a missed flash is rejected and the attendant can retry only that photo without losing the session. The captured photo appears for 2 seconds by default; change this under **Settings → Capture → Photo preview**.
 
-The app always opens on the public booth screen. If there is no event for today, that screen shows **Event setup required** with an **Open Settings** button; Settings can always be closed again without creating an event. In **Settings → Set Up**, choose **New Event**. Event ID, event date, and description always begin completely blank in this separate creation view and are not saved until **Create Event** is chosen. The entire Event Date field opens a large touch-optimized calendar; selecting a day closes it and returns focus to the field. Once created, the event is shown read-only and every session remains associated with it. The Set Up page shows a current event only when its date matches the computer’s current local date; otherwise it returns to **No Event Today** while the older event remains safely stored. Choose the printer, run **Diagnostics → Run Check**, then make a physical test print from the Layout screen. Kiosk mode is enabled by default and can be changed under Display settings.
+The app always opens on the public booth screen. If there is no event for today, that screen shows **Event setup required** with an **Open Settings** button; Settings can always be closed again without creating an event. In **Settings → Set Up**, choose **New Event**. Event ID, event date, and description always begin completely blank in this separate creation view and are not saved until **Create Event** is chosen. The entire Event Date field opens a large touch-optimized calendar; selecting a day closes it and returns focus to the field. Settings uses large type, generous spacing, and 56–64 pixel touch targets across navigation, fields, toggles, actions, session controls, diagnostics, and logs. Once created, the event is shown read-only and every session remains associated with it. The Set Up page shows a current event only when its date matches the computer’s current local date; otherwise it returns to **No Event Today** while the older event remains safely stored. Choose the printer, run **Diagnostics → Run Check**, then make a physical test print from the Layout screen. Kiosk mode is enabled by default and can be changed under Display settings.
 
 In guest mode, attendant Settings has no visible icon. Tap the invisible 96-pixel target in the upper-right corner, or press and hold it for 1.5 seconds, to open Settings.
 
