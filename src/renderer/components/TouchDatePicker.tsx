@@ -114,7 +114,7 @@ export function TouchDatePicker({ value, onChange, invalid = false }: TouchDateP
     <>
       <button
         ref={trigger}
-        className="group grid min-h-18 w-full grid-cols-[3.25rem_minmax(0,1fr)_3rem] items-center gap-3 rounded-[1.35rem] bg-stone-100 px-3 text-left text-stone-900 transition-[background-color,box-shadow,transform] hover:bg-stone-200/75 focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f7554]/15 active:scale-[0.995]"
+        className="group grid min-h-18 w-full grid-cols-[3.25rem_minmax(0,1fr)_3rem] items-center gap-3 rounded-[1.35rem] bg-[#edf2f9] px-3 text-left text-[#0b1f44] transition-[background-color,box-shadow,transform] hover:bg-[#e2eaf5] focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#ff2f92]/20 active:scale-[0.995]"
         type="button"
         aria-label={selected ? `Event date, ${accessibleDateTitle.format(selected)}` : 'Event date, choose a date'}
         aria-haspopup="dialog"
@@ -123,7 +123,7 @@ export function TouchDatePicker({ value, onChange, invalid = false }: TouchDateP
         onClick={show}
       >
         <span
-          className="grid size-13 place-items-center rounded-[1rem] bg-[#e8dfd1] text-[#6f5940] transition-colors group-hover:bg-[#ded1bf]"
+          className="grid size-13 place-items-center rounded-[1rem] bg-[#ffe6f2] text-[#c51665] transition-colors group-hover:bg-[#ffd5e9]"
           aria-hidden="true"
         >
           <svg
@@ -141,12 +141,12 @@ export function TouchDatePicker({ value, onChange, invalid = false }: TouchDateP
           </svg>
         </span>
         <span
-          className={`block min-w-0 truncate text-base font-semibold ${selected ? 'text-stone-900' : 'text-stone-500'}`}
+          className={`block min-w-0 truncate text-base font-semibold ${selected ? 'text-[#0b1f44]' : 'text-[#53657f]'}`}
         >
           {selected ? selectedDateTitle.format(selected) : 'Choose a date'}
         </span>
         <span
-          className="grid size-12 place-items-center rounded-full text-stone-500 transition-transform group-hover:translate-x-0.5"
+          className="grid size-12 place-items-center rounded-full text-[#53657f] transition-transform group-hover:translate-x-0.5"
           aria-hidden="true"
         >
           <svg
@@ -165,7 +165,7 @@ export function TouchDatePicker({ value, onChange, invalid = false }: TouchDateP
 
       <dialog
         ref={dialog}
-        className="m-auto max-h-[calc(100vh-2rem)] w-[min(94vw,34rem)] max-w-none overflow-y-auto overscroll-contain rounded-[2.25rem] bg-[#fbfaf7] p-0 text-stone-900 shadow-[0_40px_120px_rgba(28,25,23,0.28)] backdrop:bg-stone-950/35 backdrop:backdrop-blur-sm"
+        className="m-auto max-h-[calc(100vh-2rem)] w-[min(94vw,34rem)] max-w-none overflow-y-auto overscroll-contain rounded-[2.25rem] bg-white p-0 text-[#0b1f44] shadow-[0_40px_120px_rgba(11,31,68,0.28)] backdrop:bg-[#07172f]/45 backdrop:backdrop-blur-sm"
         aria-labelledby="event-date-picker-title"
         onClose={() => setOpen(false)}
         onCancel={(event) => {
@@ -190,7 +190,7 @@ export function TouchDatePicker({ value, onChange, invalid = false }: TouchDateP
               Event date
             </h2>
             <button
-              className="grid size-13 place-items-center rounded-full bg-stone-100 text-stone-600 transition-colors hover:bg-stone-200 active:bg-stone-300"
+              className="grid size-13 place-items-center rounded-full bg-[#edf2f9] text-[#415a7b] transition-colors hover:bg-[#e2eaf5] focus-visible:ring-4 focus-visible:ring-[#ff2f92]/20 active:bg-[#d8e1ef]"
               type="button"
               aria-label="Close calendar"
               onClick={close}
@@ -210,7 +210,7 @@ export function TouchDatePicker({ value, onChange, invalid = false }: TouchDateP
 
           <div className="mt-7 grid grid-cols-[3.25rem_1fr_3.25rem] items-center gap-3">
             <button
-              className="grid size-13 place-items-center rounded-full bg-stone-100 text-stone-700 transition-[background-color,transform] hover:bg-stone-200 active:scale-95"
+              className="grid size-13 place-items-center rounded-full bg-[#edf2f9] text-[#17345f] transition-[background-color,transform] hover:bg-[#e2eaf5] focus-visible:ring-4 focus-visible:ring-[#ff2f92]/20 active:scale-95"
               type="button"
               aria-label="Previous month"
               onClick={() => shiftMonth(-1)}
@@ -231,7 +231,7 @@ export function TouchDatePicker({ value, onChange, invalid = false }: TouchDateP
               {monthTitle.format(viewMonth)}
             </p>
             <button
-              className="grid size-13 place-items-center rounded-full bg-stone-100 text-stone-700 transition-[background-color,transform] hover:bg-stone-200 active:scale-95"
+              className="grid size-13 place-items-center rounded-full bg-[#edf2f9] text-[#17345f] transition-[background-color,transform] hover:bg-[#e2eaf5] focus-visible:ring-4 focus-visible:ring-[#ff2f92]/20 active:scale-95"
               type="button"
               aria-label="Next month"
               onClick={() => shiftMonth(1)}
@@ -255,7 +255,7 @@ export function TouchDatePicker({ value, onChange, invalid = false }: TouchDateP
               {weekdays.map((weekday) => (
                 <span
                   key={weekday}
-                  className="py-2 text-center text-[0.68rem] font-semibold tracking-[0.04em] text-stone-400"
+                  className="py-2 text-center text-[0.68rem] font-semibold tracking-[0.04em] text-[#788aa4]"
                   role="columnheader"
                 >
                   {weekday}
@@ -273,12 +273,12 @@ export function TouchDatePicker({ value, onChange, invalid = false }: TouchDateP
                       key={dateToInputValue(date)}
                       className={`mx-auto grid size-12 place-items-center rounded-full text-sm font-semibold transition-[background-color,color,transform,box-shadow] active:scale-90 ${
                         isSelected
-                          ? 'bg-stone-950 text-white shadow-[0_8px_24px_rgba(28,25,23,0.22)]'
+                          ? 'bg-[#0b1f44] text-white shadow-[inset_0_0_0_2px_#ff2f92,0_8px_24px_rgba(11,31,68,0.22)]'
                           : isToday
-                            ? 'bg-[#e8dfd1] text-[#5f4c36] hover:bg-[#ded1bf]'
+                            ? 'bg-[#ffe6f2] text-[#c51665] hover:bg-[#ffd5e9]'
                             : inMonth
-                              ? 'text-stone-800 hover:bg-stone-200/80'
-                              : 'text-stone-300 hover:bg-stone-100'
+                              ? 'text-[#142d57] hover:bg-[#e7edf7]'
+                              : 'text-[#a8b5c8] hover:bg-[#f0f4fa]'
                       }`}
                       type="button"
                       role="gridcell"
@@ -322,7 +322,7 @@ export function TouchDatePicker({ value, onChange, invalid = false }: TouchDateP
 
           <div className="mt-7 flex justify-end">
             <button
-              className="min-h-14 rounded-full bg-stone-100 px-6 text-base font-semibold text-stone-700 transition-[background-color,transform] hover:bg-stone-200 active:scale-95"
+              className="min-h-14 rounded-full bg-[#edf2f9] px-6 text-base font-semibold text-[#17345f] transition-[background-color,transform] hover:bg-[#e2eaf5] focus-visible:ring-4 focus-visible:ring-[#ff2f92]/20 active:scale-95"
               type="button"
               onClick={() => choose(today)}
             >

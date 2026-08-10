@@ -28,13 +28,13 @@ type Tab = (typeof tabs)[number];
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'required';
 
 const tabId = (tab: Tab) => tab.toLowerCase().replaceAll(' ', '-');
-const cardClass = 'mb-6 max-w-6xl rounded-[2rem] bg-white/90 p-10 shadow-[0_16px_55px_rgba(63,55,46,0.055)]';
+const cardClass = 'mb-6 max-w-6xl rounded-[2rem] bg-white p-10 shadow-[0_18px_55px_rgba(11,31,68,0.075)]';
 const inputClass =
-  'min-h-16 w-full rounded-[1.25rem] bg-stone-100 px-5 text-base text-stone-900 transition-[background-color,box-shadow] placeholder:text-stone-400 focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#8f7554]/15';
+  'min-h-16 w-full rounded-[1.25rem] bg-[#edf2f9] px-5 text-base text-[#0b1f44] transition-[background-color,box-shadow] placeholder:text-[#788aa4] focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#ff2f92]/20';
 const actionClass =
-  'min-h-14 rounded-[1.25rem] bg-stone-900 px-6 text-base font-semibold text-white transition-[background-color,transform] hover:bg-stone-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45';
+  'min-h-14 rounded-[1.25rem] bg-[#0b1f44] px-6 text-base font-semibold text-white transition-[background-color,transform,box-shadow] hover:bg-[#142d57] focus-visible:ring-4 focus-visible:ring-[#ff2f92]/25 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45';
 const quietActionClass =
-  'min-h-14 rounded-[1.25rem] bg-stone-100 px-6 text-base font-semibold text-stone-700 transition-[background-color,transform] hover:bg-stone-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45';
+  'min-h-14 rounded-[1.25rem] bg-[#edf2f9] px-6 text-base font-semibold text-[#17345f] transition-[background-color,transform,box-shadow] hover:bg-[#e2eaf5] focus-visible:ring-4 focus-visible:ring-[#ff2f92]/20 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45';
 
 interface SetupScreenProps {
   config: EventConfig;
@@ -46,9 +46,9 @@ interface SetupScreenProps {
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="grid gap-2">
-      <span className="pl-1 text-sm font-semibold text-stone-600">{label}</span>
+      <span className="pl-1 text-sm font-semibold text-[#415a7b]">{label}</span>
       {children}
-      {hint ? <small className="pl-1 text-xs leading-5 text-stone-500">{hint}</small> : null}
+      {hint ? <small className="pl-1 text-xs leading-5 text-[#53657f]">{hint}</small> : null}
     </label>
   );
 }
@@ -66,7 +66,7 @@ function Toggle({
 }) {
   return (
     <button
-      className="my-2 flex min-h-20 w-full items-center justify-between gap-5 rounded-[1.35rem] bg-stone-200/70 px-5 text-left transition-colors hover:bg-stone-200"
+      className="my-2 flex min-h-20 w-full items-center justify-between gap-5 rounded-[1.35rem] bg-[#edf2f9] px-5 text-left transition-colors hover:bg-[#e2eaf5] focus-visible:ring-4 focus-visible:ring-[#ff2f92]/20"
       type="button"
       role="switch"
       aria-checked={checked}
@@ -74,10 +74,10 @@ function Toggle({
     >
       <span>
         <strong className="block text-base font-semibold">{label}</strong>
-        {description ? <span className="mt-1 block text-sm leading-5 text-stone-500">{description}</span> : null}
+        {description ? <span className="mt-1 block text-sm leading-5 text-[#53657f]">{description}</span> : null}
       </span>
       <span
-        className={`relative h-8 w-14 shrink-0 rounded-full p-1 transition-colors ${checked ? 'bg-stone-900' : 'bg-stone-400'}`}
+        className={`relative h-8 w-14 shrink-0 rounded-full p-1 transition-colors ${checked ? 'bg-[#ff2f92]' : 'bg-[#8796aa]'}`}
         aria-hidden="true"
       >
         <span
@@ -97,12 +97,12 @@ function LayoutThumbnail({
   selected: boolean;
   compact?: boolean;
 }) {
-  const rail = selected ? 'bg-[#b8a485]' : 'bg-[#d3c6b3]';
-  const photo = selected ? 'bg-stone-50' : 'bg-white/80';
+  const rail = selected ? 'bg-[#ff2f92]' : 'bg-[#9fb0c8]';
+  const photo = selected ? 'bg-[#f8faff]' : 'bg-white/80';
   if (preset === 'side-rail-one-landscape') {
     return (
       <span
-        className={`grid aspect-[3/2] grid-cols-[1fr_5fr] overflow-hidden bg-stone-300 ${compact ? 'w-12 rounded-lg' : 'w-24 rounded-xl'}`}
+        className={`grid aspect-[3/2] grid-cols-[1fr_5fr] overflow-hidden bg-[#d8e1ef] ${compact ? 'w-12 rounded-lg' : 'w-24 rounded-xl'}`}
         aria-hidden="true"
       >
         <i className={rail} />
@@ -113,7 +113,7 @@ function LayoutThumbnail({
   if (preset === 'center-rail-two-stack') {
     return (
       <span
-        className={`grid aspect-[2/3] grid-rows-[5fr_2fr_5fr] overflow-hidden bg-stone-300 ${compact ? 'h-12 rounded-lg' : 'h-20 rounded-xl'}`}
+        className={`grid aspect-[2/3] grid-rows-[5fr_2fr_5fr] overflow-hidden bg-[#d8e1ef] ${compact ? 'h-12 rounded-lg' : 'h-20 rounded-xl'}`}
         aria-hidden="true"
       >
         <i className={photo} />
@@ -124,11 +124,11 @@ function LayoutThumbnail({
   }
   return (
     <span
-      className={`grid aspect-[2/3] grid-cols-[1fr_3fr] overflow-hidden bg-stone-300 ${compact ? 'h-12 rounded-lg' : 'h-20 rounded-xl'}`}
+      className={`grid aspect-[2/3] grid-cols-[1fr_3fr] overflow-hidden bg-[#d8e1ef] ${compact ? 'h-12 rounded-lg' : 'h-20 rounded-xl'}`}
       aria-hidden="true"
     >
       <i className={rail} />
-      <span className="grid grid-rows-3 gap-px bg-stone-300">
+      <span className="grid grid-rows-3 gap-px bg-[#d8e1ef]">
         <i className={photo} />
         <i className={photo} />
         <i className={photo} />
@@ -155,8 +155,8 @@ function LayoutPicker({
             key={preset.id}
             className={`relative text-left transition-[background-color,color,transform] active:scale-[0.99] ${
               compact
-                ? `grid min-h-24 grid-cols-[auto_1fr_auto] items-center gap-3 rounded-[1.15rem] px-4 py-3 ${selected ? 'bg-stone-900 text-white shadow-[0_10px_28px_rgba(28,25,23,0.13)]' : 'bg-stone-100 text-stone-900 hover:bg-stone-200/80'}`
-                : `flex min-h-48 flex-col items-start rounded-[1.5rem] p-5 ${selected ? 'bg-stone-900 text-white shadow-[0_18px_45px_rgba(28,25,23,0.16)]' : 'bg-stone-100 text-stone-900 hover:bg-stone-200/80'}`
+                ? `grid min-h-24 grid-cols-[auto_1fr_auto] items-center gap-3 rounded-[1.15rem] px-4 py-3 focus-visible:ring-4 focus-visible:ring-[#ff2f92]/25 ${selected ? 'bg-[#0b1f44] text-white shadow-[inset_0_0_0_2px_#ff2f92,0_10px_28px_rgba(11,31,68,0.16)]' : 'bg-[#eaf0f8] text-[#0b1f44] hover:bg-[#dfe8f4]'}`
+                : `flex min-h-48 flex-col items-start rounded-[1.5rem] p-5 focus-visible:ring-4 focus-visible:ring-[#ff2f92]/25 ${selected ? 'bg-[#0b1f44] text-white shadow-[inset_0_0_0_2px_#ff2f92,0_18px_45px_rgba(11,31,68,0.18)]' : 'bg-[#eaf0f8] text-[#0b1f44] hover:bg-[#dfe8f4]'}`
             }`}
             type="button"
             role="radio"
@@ -169,13 +169,13 @@ function LayoutPicker({
                 {preset.name}
               </strong>
               <span
-                className={`${compact ? 'mt-1 block text-[0.7rem] leading-4' : 'mt-auto pt-4 text-xs leading-5'} ${selected ? 'text-stone-400' : 'text-stone-500'}`}
+                className={`${compact ? 'mt-1 block text-[0.7rem] leading-4' : 'mt-auto pt-4 text-xs leading-5'} ${selected ? 'text-[#8796aa]' : 'text-[#53657f]'}`}
               >
                 {preset.photoCount} photo{preset.photoCount === 1 ? '' : 's'} · {preset.printSize}
               </span>
             </span>
             <span
-              className={`${compact ? 'grid size-6' : 'absolute top-5 right-5 grid size-7'} place-items-center rounded-full ${selected ? 'bg-white text-stone-950' : 'opacity-0'}`}
+              className={`${compact ? 'grid size-6' : 'absolute top-5 right-5 grid size-7'} place-items-center rounded-full ${selected ? 'bg-[#ff2f92] text-white' : 'opacity-0'}`}
               aria-hidden="true"
             >
               ✓
@@ -201,17 +201,17 @@ function RailArtworkControl({
   const preset = getLayoutPreset(layout.preset);
   if (compact) {
     return (
-      <div className="flex min-h-20 flex-wrap items-center justify-between gap-3 rounded-[1.15rem] bg-stone-100 px-4 py-3">
+      <div className="flex min-h-20 flex-wrap items-center justify-between gap-3 rounded-[1.15rem] bg-[#f0f4fa] px-4 py-3">
         <div className="min-w-0">
           <strong className="block text-sm font-semibold">Rail artwork</strong>
           <span
-            className={`mt-1 block truncate text-xs ${layout.railImageAssetId ? 'text-stone-500' : 'text-[#8a5d43]'}`}
+            className={`mt-1 block truncate text-xs ${layout.railImageAssetId ? 'text-[#53657f]' : 'text-[#c51665]'}`}
           >
             {layout.railImageName || `${preset.artworkSize} PNG required`}
           </span>
         </div>
         <button
-          className="min-h-12 rounded-xl bg-white px-4 text-sm font-semibold text-stone-800 shadow-sm transition-[background-color,transform] hover:bg-stone-50 active:scale-[0.98] disabled:opacity-45"
+          className="min-h-12 rounded-xl bg-white px-4 text-sm font-semibold text-[#142d57] shadow-sm transition-[background-color,transform] hover:bg-[#f8faff] active:scale-[0.98] disabled:opacity-45"
           type="button"
           disabled={busy}
           onClick={onChoose}
@@ -222,12 +222,12 @@ function RailArtworkControl({
     );
   }
   return (
-    <div className={`rounded-[1.5rem] p-5 ${layout.railImageAssetId ? 'bg-stone-100' : 'bg-[#f5eee5]'}`}>
+    <div className={`rounded-[1.5rem] p-5 ${layout.railImageAssetId ? 'bg-[#f0f4fa]' : 'bg-[#fff0f7]'}`}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
           <strong className="block text-base">Rail Artwork</strong>
           <span
-            className={`mt-1 block truncate text-sm ${layout.railImageAssetId ? 'text-stone-500' : 'text-[#8a5d43]'}`}
+            className={`mt-1 block truncate text-sm ${layout.railImageAssetId ? 'text-[#53657f]' : 'text-[#c51665]'}`}
           >
             {layout.railImageName || 'PNG required for this event'}
           </span>
@@ -236,7 +236,7 @@ function RailArtworkControl({
           {busy ? 'Importing…' : layout.railImageAssetId ? 'Replace PNG' : 'Add PNG'}
         </button>
       </div>
-      <p className="mt-4 text-sm leading-6 text-stone-500">
+      <p className="mt-4 text-sm leading-6 text-[#53657f]">
         Use a {preset.artworkSize} PNG for the {preset.railSize} rail. Larger artwork is centered and cropped.
       </p>
     </div>
@@ -608,15 +608,15 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
         : undefined;
   const draftIssues = newEventDraft ? eventDraftIssues(newEventDraft) : [];
   return (
-    <main className="grid h-full grid-cols-[19rem_minmax(0,1fr)] overflow-x-hidden bg-stone-100 text-stone-900">
+    <main className="grid h-full grid-cols-[19rem_minmax(0,1fr)] overflow-x-hidden bg-[#f4f7fc] text-[#0b1f44]">
       <a
-        className="sr-only fixed top-4 left-4 z-50 rounded-xl bg-stone-950 px-4 py-3 text-sm font-semibold text-white focus:not-sr-only"
+        className="sr-only fixed top-4 left-4 z-50 rounded-xl bg-[#07172f] px-4 py-3 text-sm font-semibold text-white focus:not-sr-only"
         href="#settings-content"
       >
         Skip to settings
       </a>
       <aside
-        className="m-6 mr-0 flex min-h-0 flex-col overflow-hidden rounded-[2.25rem] bg-white/90 p-5"
+        className="m-6 mr-0 flex min-h-0 flex-col overflow-hidden rounded-[2.25rem] bg-white p-5 shadow-[0_20px_60px_rgba(11,31,68,0.08)]"
         aria-label="Settings sections"
         inert={selectedSession || confirmNewEvent ? true : undefined}
       >
@@ -630,7 +630,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
             <button
               key={item}
               id={`tab-${tabId(item)}`}
-              className={`min-h-14 rounded-[1.2rem] px-5 text-left text-base font-medium transition-[background-color,color] disabled:cursor-not-allowed disabled:opacity-35 ${tab === item ? 'bg-stone-200/80 text-stone-950' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-800'}`}
+              className={`min-h-14 rounded-[1.2rem] px-5 text-left text-base font-medium transition-[background-color,color,box-shadow] focus-visible:ring-4 focus-visible:ring-[#ff2f92]/20 disabled:cursor-not-allowed disabled:opacity-35 ${tab === item ? 'bg-[#0b1f44] text-white shadow-[inset_4px_0_0_#ff2f92]' : 'text-[#53657f] hover:bg-[#edf2f9] hover:text-[#0b1f44]'}`}
               type="button"
               disabled={Boolean(newEventDraft && item !== 'Set Up')}
               role="tab"
@@ -673,7 +673,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
             </h2>
             {saveLabel ? (
               <p
-                className={`mt-1 text-sm ${saveStatus === 'error' ? 'text-red-700' : 'text-stone-500'}`}
+                className={`mt-1 text-sm ${saveStatus === 'error' ? 'text-red-700' : 'text-[#53657f]'}`}
                 role="status"
                 aria-live="polite"
               >
@@ -682,7 +682,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
             ) : null}
           </div>
           <button
-            className="grid size-14 place-items-center rounded-full bg-white text-stone-800 shadow-sm transition-[background-color,transform] hover:bg-stone-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+            className="grid size-14 place-items-center rounded-full bg-white text-[#0b1f44] shadow-[0_8px_24px_rgba(11,31,68,0.09)] transition-[background-color,transform,box-shadow] hover:bg-[#fff0f7] focus-visible:ring-4 focus-visible:ring-[#ff2f92]/25 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
             type="button"
             onClick={() => void close()}
             disabled={busy === 'close'}
@@ -705,19 +705,19 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
 
         <div
           id={`panel-${tabId(tab)}`}
-          className="min-h-0 flex-1 [scrollbar-width:thin] [scrollbar-color:#c8c2b8_transparent] overflow-y-auto overscroll-contain px-[clamp(3rem,6vw,6.5rem)] pb-20"
+          className="min-h-0 flex-1 [scrollbar-width:thin] [scrollbar-color:#aab8cc_transparent] overflow-y-auto overscroll-contain px-[clamp(3rem,6vw,6.5rem)] pb-20"
           role="tabpanel"
           aria-labelledby={`tab-${tabId(tab)}`}
         >
           {message && messageTab === tab ? (
             <div
-              className={`fixed right-8 bottom-8 z-40 flex max-w-md items-center justify-between gap-4 rounded-[1.4rem] px-6 py-5 text-base shadow-2xl ${messageTone === 'error' ? 'bg-red-950 text-red-50' : messageTone === 'success' ? 'bg-emerald-950 text-emerald-50' : 'bg-stone-900 text-stone-50'}`}
+              className={`fixed right-8 bottom-8 z-40 flex max-w-md items-center justify-between gap-4 rounded-[1.4rem] px-6 py-5 text-base shadow-2xl ${messageTone === 'error' ? 'bg-red-950 text-red-50' : messageTone === 'success' ? 'bg-emerald-950 text-emerald-50' : 'bg-[#0b1f44] text-[#f8faff]'}`}
               role={messageTone === 'error' ? 'alert' : 'status'}
               aria-live="polite"
             >
               <span className="min-w-0 break-words">{message}</span>
               <button
-                className="grid size-12 shrink-0 place-items-center rounded-full hover:bg-stone-300/70 focus-visible:ring-4 focus-visible:ring-stone-400/25"
+                className="grid size-12 shrink-0 place-items-center rounded-full hover:bg-[#d8e1ef]/80 focus-visible:ring-4 focus-visible:ring-[#ff2f92]/25"
                 type="button"
                 aria-label="Dismiss notification"
                 onClick={() => setMessage('')}
@@ -742,7 +742,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                 <div className="flex items-start justify-between gap-8">
                   <div>
                     <h3 className="text-2xl font-semibold tracking-[-0.035em]">Create a New Event</h3>
-                    <p className="mt-2 max-w-xl text-base leading-7 text-stone-500">
+                    <p className="mt-2 max-w-xl text-base leading-7 text-[#53657f]">
                       Add the details for this event. Nothing is saved until you create it.
                     </p>
                   </div>
@@ -772,7 +772,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                     />
                   </Field>
                   <div className="grid gap-2">
-                    <span className="pl-1 text-sm font-semibold text-stone-600">Event Date</span>
+                    <span className="pl-1 text-sm font-semibold text-[#415a7b]">Event Date</span>
                     <TouchDatePicker
                       value={newEventDraft.eventDate}
                       invalid={!newEventDraft.eventDate}
@@ -837,7 +837,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                     {busy === 'create-event' ? 'Creating…' : 'Create Event'}
                   </button>
                   {draftIssues.length ? (
-                    <p className="text-sm text-stone-500" aria-live="polite">
+                    <p className="text-sm text-[#53657f]" aria-live="polite">
                       {draftIssues[0]}
                     </p>
                   ) : null}
@@ -847,7 +847,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
               <section className={cardClass}>
                 <div className="flex items-start justify-between gap-8">
                   <div>
-                    <span className="inline-flex rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-800">
+                    <span className="inline-flex rounded-full bg-[#ffe6f2] px-4 py-2 text-sm font-semibold text-[#c51665]">
                       Today’s Event
                     </span>
                     <h3 className="mt-5 text-3xl font-semibold tracking-[-0.045em] text-balance">
@@ -860,40 +860,40 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                 </div>
                 <dl className="mt-10 grid gap-x-10 gap-y-7 md:grid-cols-2">
                   <div>
-                    <dt className="text-sm font-semibold text-stone-500">Event ID</dt>
-                    <dd className="mt-2 text-base font-medium break-words text-stone-900">{draft.id}</dd>
+                    <dt className="text-sm font-semibold text-[#53657f]">Event ID</dt>
+                    <dd className="mt-2 text-base font-medium break-words text-[#0b1f44]">{draft.id}</dd>
                   </div>
                   <div>
-                    <dt className="text-sm font-semibold text-stone-500">Event Date</dt>
-                    <dd className="mt-2 text-base font-medium text-stone-900">
+                    <dt className="text-sm font-semibold text-[#53657f]">Event Date</dt>
+                    <dd className="mt-2 text-base font-medium text-[#0b1f44]">
                       {eventDate.format(dateInputToLocalDate(draft.eventDate))}
                     </dd>
                   </div>
                   <div className="md:col-span-2">
-                    <dt className="text-sm font-semibold text-stone-500">Event Folder</dt>
-                    <dd className="mt-2 text-base leading-6 font-medium break-all text-stone-700">
+                    <dt className="text-sm font-semibold text-[#53657f]">Event Folder</dt>
+                    <dd className="mt-2 text-base leading-6 font-medium break-all text-[#2e466a]">
                       {draft.baseFolder}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-sm font-semibold text-stone-500">Print Layout</dt>
-                    <dd className="mt-2 text-base font-medium text-stone-900">
+                    <dt className="text-sm font-semibold text-[#53657f]">Print Layout</dt>
+                    <dd className="mt-2 text-base font-medium text-[#0b1f44]">
                       {getLayoutPreset(draft.layout.preset).name}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-sm font-semibold text-stone-500">Rail Artwork</dt>
-                    <dd className="mt-2 text-base font-medium break-words text-stone-900">
+                    <dt className="text-sm font-semibold text-[#53657f]">Rail Artwork</dt>
+                    <dd className="mt-2 text-base font-medium break-words text-[#0b1f44]">
                       {draft.layout.railImageName || 'Not added'}
                     </dd>
                   </div>
                 </dl>
               </section>
             ) : (
-              <section className="grid min-h-[28rem] max-w-6xl place-items-center rounded-[2.25rem] bg-white/90 p-10 text-center shadow-[0_16px_55px_rgba(63,55,46,0.055)]">
+              <section className="grid min-h-[28rem] max-w-6xl place-items-center rounded-[2.25rem] bg-white/90 p-10 text-center shadow-[0_16px_55px_rgba(11,31,68,0.055)]">
                 <div className="max-w-lg">
                   <div
-                    className="mx-auto grid size-16 place-items-center rounded-full bg-stone-100 text-stone-700"
+                    className="mx-auto grid size-16 place-items-center rounded-full bg-[#f0f4fa] text-[#2e466a]"
                     aria-hidden="true"
                   >
                     <svg
@@ -908,7 +908,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                     </svg>
                   </div>
                   <h3 className="mt-7 text-3xl font-semibold tracking-[-0.045em] text-balance">No Event Today</h3>
-                  <p className="mt-3 text-base leading-7 text-stone-500">
+                  <p className="mt-3 text-base leading-7 text-[#53657f]">
                     Create an event for today when you’re ready to open the booth.
                   </p>
                   <button className={`${actionClass} mt-8 min-w-44`} type="button" onClick={beginNewEvent}>
@@ -925,7 +925,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                 <div className="grid grid-cols-2 gap-x-8 gap-y-10 lg:grid-cols-3">
                   {completedSessions.map((item) => (
                     <button
-                      className="group min-w-0 rounded-[1.5rem] text-left transition-transform hover:-translate-y-1 focus-visible:ring-4 focus-visible:ring-[#8f7554]/20 motion-reduce:transform-none"
+                      className="group min-w-0 rounded-[1.5rem] text-left transition-transform hover:-translate-y-1 focus-visible:ring-4 focus-visible:ring-[#ff2f92]/20 motion-reduce:transform-none"
                       type="button"
                       key={item.id}
                       onClick={() => {
@@ -938,7 +938,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                     >
                       <span className="relative block">
                         <img
-                          className="aspect-[2/3] w-full rounded-[1.5rem] bg-stone-200 object-cover shadow-[0_16px_45px_rgba(63,55,46,0.1)] transition-shadow group-hover:shadow-[0_22px_55px_rgba(63,55,46,0.16)]"
+                          className="aspect-[2/3] w-full rounded-[1.5rem] bg-[#e5ebf5] object-cover shadow-[0_16px_45px_rgba(11,31,68,0.1)] transition-shadow group-hover:shadow-[0_22px_55px_rgba(11,31,68,0.16)]"
                           src={item.finalDataUrl}
                           alt={`Photo strip from ${sessionDate.format(new Date(item.createdAt))}`}
                           width={1200}
@@ -947,7 +947,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                         />
                         {item.recapUrl || item.videoUrl ? (
                           <span
-                            className="absolute right-3 bottom-3 grid size-13 place-items-center rounded-full bg-stone-950/80 text-white shadow-lg backdrop-blur-sm"
+                            className="absolute right-3 bottom-3 grid size-13 place-items-center rounded-full bg-[#07172f]/85 text-white shadow-lg backdrop-blur-sm"
                             aria-label={item.recapUrl ? 'Recap available' : 'Full session video available'}
                           >
                             <svg className="ml-0.5 size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -961,14 +961,14 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                           {sessionDate.format(new Date(item.createdAt))}
                         </time>
                         {item.recapUrl ? (
-                          <span className="text-sm font-medium text-stone-500">Recap</span>
+                          <span className="text-sm font-medium text-[#53657f]">Recap</span>
                         ) : ['pending', 'processing', 'interrupted'].includes(item.recapStatus) && item.videoUrl ? (
-                          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-stone-500">
-                            <span className="size-1.5 animate-pulse rounded-full bg-[#9a7c55]" aria-hidden="true" />
+                          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-[#53657f]">
+                            <span className="size-1.5 animate-pulse rounded-full bg-[#ff2f92]" aria-hidden="true" />
                             Creating recap
                           </span>
                         ) : item.videoUrl ? (
-                          <span className="text-sm font-medium text-stone-500">Full video</span>
+                          <span className="text-sm font-medium text-[#53657f]">Full video</span>
                         ) : null}
                       </span>
                     </button>
@@ -978,7 +978,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                 <div className="grid min-h-80 place-items-center rounded-[2rem] bg-white/80 p-10 text-center">
                   <div>
                     <h3 className="text-xl font-semibold">No Finished Sessions</h3>
-                    <p className="mt-2 text-base text-stone-500">Completed photo strips will appear here.</p>
+                    <p className="mt-2 text-base text-[#53657f]">Completed photo strips will appear here.</p>
                   </div>
                 </div>
               )}
@@ -988,7 +988,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
           {tab === 'Capture' ? (
             <section className={cardClass}>
               <h3 className="text-2xl font-semibold tracking-[-0.035em]">Session timing</h3>
-              <p className="mt-2 mb-8 text-base leading-7 text-stone-500">
+              <p className="mt-2 mb-8 text-base leading-7 text-[#53657f]">
                 Set the pace of each {getLayoutPreset(draft.layout.preset).photoCount}-photo session.
               </p>
               <div className="grid max-w-3xl gap-5 md:grid-cols-2">
@@ -1045,7 +1045,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
             <div className="grid max-w-6xl gap-5 xl:grid-cols-[minmax(30rem,1fr)_22rem]">
               <section className={cardClass}>
                 <h3 className="text-2xl font-semibold tracking-[-0.035em] text-balance">Print Layout</h3>
-                <p className="mt-2 mb-8 text-base leading-7 text-stone-500">
+                <p className="mt-2 mb-8 text-base leading-7 text-[#53657f]">
                   Choose the session format, then add the finished artwork for its rail.
                 </p>
                 <LayoutPicker layout={draft.layout} onChange={(layout) => patch('layout', layout)} />
@@ -1058,7 +1058,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                 </div>
               </section>
               <section
-                className="grid min-h-[34rem] place-items-center self-start rounded-[2rem] bg-stone-900 p-6 text-center text-stone-300"
+                className="grid min-h-[34rem] place-items-center self-start rounded-[2rem] bg-[#0b1f44] p-6 text-center text-[#d8e1ef]"
                 aria-live="polite"
               >
                 {layoutError ? (
@@ -1083,12 +1083,12 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                     <strong className="text-3xl font-medium">
                       {busy === 'preview' ? 'Rendering…' : getLayoutPreset(draft.layout.preset).printSize}
                     </strong>
-                    <p className="mt-2 text-sm text-stone-500">Preparing the print preview…</p>
+                    <p className="mt-2 text-sm text-[#53657f]">Preparing the print preview…</p>
                   </div>
                 )}
                 {preview ? (
                   <button
-                    className="mt-5 min-h-14 rounded-[1.25rem] bg-stone-50 px-6 text-base font-semibold text-stone-900 transition-colors hover:bg-white"
+                    className="mt-5 min-h-14 rounded-[1.25rem] bg-[#f8faff] px-6 text-base font-semibold text-[#0b1f44] transition-colors hover:bg-white"
                     type="button"
                     onClick={() =>
                       void withFeedback(
@@ -1108,12 +1108,12 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
           {tab === 'Camera' ? (
             <section className={cardClass}>
               <h3 className="text-2xl font-semibold tracking-[-0.035em]">Canon camera</h3>
-              <p className="mt-2 mb-7 text-base leading-7 text-stone-500">
+              <p className="mt-2 mb-7 text-base leading-7 text-[#53657f]">
                 Official Canon EDSDK connection for live view, autofocus, and capture.
               </p>
-              <div className="rounded-[1.4rem] bg-stone-200/70 p-5">
+              <div className="rounded-[1.4rem] bg-[#e7edf7] p-5">
                 <strong className="block text-base">Canon EOS Rebel T6i</strong>
-                <span className="mt-1 block text-sm text-stone-500">USB live view and JPEG capture</span>
+                <span className="mt-1 block text-sm text-[#53657f]">USB live view and JPEG capture</span>
               </div>
               <button
                 className={`${actionClass} mt-5`}
@@ -1130,7 +1130,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
             <>
               <section className={cardClass}>
                 <h3 className="text-2xl font-semibold tracking-[-0.035em]">Windows printer</h3>
-                <p className="mt-2 mb-8 text-base leading-7 text-stone-500">
+                <p className="mt-2 mb-8 text-base leading-7 text-[#53657f]">
                   Print through the installed Windows driver.
                 </p>
                 <div className="grid gap-5 md:grid-cols-2">
@@ -1151,8 +1151,8 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                     </select>
                   </Field>
                   <div className="grid gap-2">
-                    <span className="pl-1 text-sm font-semibold text-stone-600">Print format</span>
-                    <div className="flex min-h-16 items-center rounded-[1.25rem] bg-stone-100 px-5 text-base font-medium">
+                    <span className="pl-1 text-sm font-semibold text-[#415a7b]">Print format</span>
+                    <div className="flex min-h-16 items-center rounded-[1.25rem] bg-[#f0f4fa] px-5 text-base font-medium">
                       {getLayoutPreset(draft.layout.preset).printSize} ·{' '}
                       {getLayoutPreset(draft.layout.preset).orientation === 'landscape' ? 'Landscape' : 'Portrait'}
                     </div>
@@ -1189,7 +1189,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                   </Field>
                 </div>
               </section>
-              <div className="max-w-5xl rounded-3xl bg-stone-200/75 p-6 text-sm leading-6 text-stone-600">
+              <div className="max-w-5xl rounded-3xl bg-[#e7edf7] p-6 text-sm leading-6 text-[#415a7b]">
                 The booth confirms when Windows accepts a print job. Physical completion depends on the printer driver
                 and hardware.
               </div>
@@ -1213,7 +1213,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
           {tab === 'Sharing' ? (
             <section className={cardClass}>
               <h3 className="text-2xl font-semibold tracking-[-0.035em]">Cloud sharing</h3>
-              <p className="mt-2 mb-6 text-base leading-7 text-stone-500">
+              <p className="mt-2 mb-6 text-base leading-7 text-[#53657f]">
                 Optional. Capture and printing continue when the internet is unavailable.
               </p>
               <Toggle
@@ -1299,10 +1299,10 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
 
           {tab === 'Diagnostics' ? (
             <>
-              <section className="flex max-w-5xl items-center justify-between gap-8 rounded-[2rem] bg-white/90 p-8 shadow-[0_16px_55px_rgba(63,55,46,0.07)]">
+              <section className="flex max-w-5xl items-center justify-between gap-8 rounded-[2rem] bg-white/90 p-8 shadow-[0_16px_55px_rgba(11,31,68,0.07)]">
                 <div>
                   <h3 className="text-2xl font-semibold tracking-[-0.035em]">Check the Booth</h3>
-                  <p className="mt-2 text-base leading-7 text-stone-500">
+                  <p className="mt-2 text-base leading-7 text-[#53657f]">
                     Storage, camera, printer, disk space, and optional cloud services.
                   </p>
                 </div>
@@ -1320,7 +1320,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                 {checks.length ? (
                   checks.map((check) => (
                     <div
-                      className="grid min-h-20 grid-cols-[3rem_13rem_1fr] items-center gap-4 rounded-2xl px-5 even:bg-stone-100"
+                      className="grid min-h-20 grid-cols-[3rem_13rem_1fr] items-center gap-4 rounded-2xl px-5 even:bg-[#f0f4fa]"
                       key={check.label}
                     >
                       <span
@@ -1330,11 +1330,11 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                         {check.status === 'pass' ? '✓' : check.status === 'warning' ? '!' : '×'}
                       </span>
                       <strong className="text-base">{check.label}</strong>
-                      <span className="text-sm leading-6 text-stone-500">{check.detail}</span>
+                      <span className="text-sm leading-6 text-[#53657f]">{check.detail}</span>
                     </div>
                   ))
                 ) : (
-                  <p className="p-6 text-base text-stone-500">No check has been run yet.</p>
+                  <p className="p-6 text-base text-[#53657f]">No check has been run yet.</p>
                 )}
               </section>
               <div className="mt-4 flex max-w-5xl flex-wrap gap-2">
@@ -1363,15 +1363,15 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
 
           {tab === 'Logs' ? (
             <>
-              <section className="flex max-w-6xl flex-wrap items-center justify-between gap-5 rounded-[2rem] bg-stone-950 p-7 text-white shadow-[0_18px_60px_rgba(28,25,23,0.16)]">
+              <section className="flex max-w-6xl flex-wrap items-center justify-between gap-5 rounded-[2rem] bg-[#07172f] p-7 text-white shadow-[0_18px_60px_rgba(11,31,68,0.16)]">
                 <div>
                   <h3 className="text-2xl font-semibold tracking-[-0.035em] text-balance">Application Logs</h3>
-                  <p className="mt-2 text-sm text-stone-400">
+                  <p className="mt-2 text-sm text-[#8796aa]">
                     Latest activity appears here and refreshes every 10 seconds.
                   </p>
                 </div>
                 <button
-                  className="min-h-14 rounded-[1.25rem] bg-white px-6 text-base font-semibold text-stone-900 transition-colors hover:bg-stone-100 disabled:opacity-50"
+                  className="min-h-14 rounded-[1.25rem] bg-white px-6 text-base font-semibold text-[#0b1f44] transition-colors hover:bg-[#f0f4fa] disabled:opacity-50"
                   type="button"
                   disabled={busy === 'logs'}
                   onClick={() => void refreshLogs()}
@@ -1380,7 +1380,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                 </button>
               </section>
 
-              <section className="mt-4 max-w-6xl rounded-[1.75rem] bg-white/90 p-3 shadow-[0_14px_50px_rgba(63,55,46,0.05)]">
+              <section className="mt-4 max-w-6xl rounded-[1.75rem] bg-white/90 p-3 shadow-[0_14px_50px_rgba(11,31,68,0.05)]">
                 <p className="sr-only" role="status" aria-live="polite">
                   {visibleLogs.length} matching log entries
                 </p>
@@ -1391,13 +1391,13 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                     return (
                       <button
                         key={level}
-                        className={`min-h-14 rounded-2xl px-5 text-sm font-semibold transition-colors ${selected ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`}
+                        className={`min-h-14 rounded-2xl px-5 text-sm font-semibold transition-colors ${selected ? 'bg-[#0b1f44] text-white' : 'bg-[#f0f4fa] text-[#415a7b] hover:bg-[#e5ebf5]'}`}
                         type="button"
                         aria-pressed={selected}
                         onClick={() => setLogLevel(level)}
                       >
                         {level === 'all' ? 'All' : level === 'warn' ? 'Warnings' : humanStatus(level)}{' '}
-                        <span className={selected ? 'text-stone-300' : 'text-stone-400'}>{count}</span>
+                        <span className={selected ? 'text-[#d8e1ef]' : 'text-[#8796aa]'}>{count}</span>
                       </button>
                     );
                   })}
@@ -1410,15 +1410,15 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                       return (
                         <li
                           key={`${entry.at}-${index}`}
-                          className="grid min-w-0 grid-cols-[6.5rem_13rem_minmax(0,1fr)] items-start gap-4 rounded-2xl px-5 py-4 even:bg-stone-100"
+                          className="grid min-w-0 grid-cols-[6.5rem_13rem_minmax(0,1fr)] items-start gap-4 rounded-2xl px-5 py-4 even:bg-[#f0f4fa]"
                         >
                           <span
-                            className={`mt-0.5 w-fit rounded-lg px-2.5 py-1.5 text-xs font-bold tracking-wide uppercase ${entry.level === 'error' ? 'bg-red-100 text-red-800' : entry.level === 'warn' ? 'bg-amber-100 text-amber-800' : 'bg-stone-200 text-stone-600'}`}
+                            className={`mt-0.5 w-fit rounded-lg px-2.5 py-1.5 text-xs font-bold tracking-wide uppercase ${entry.level === 'error' ? 'bg-red-100 text-red-800' : entry.level === 'warn' ? 'bg-amber-100 text-amber-800' : 'bg-[#e5ebf5] text-[#415a7b]'}`}
                           >
                             {entry.level}
                           </span>
                           <time
-                            className="pt-1 text-xs leading-5 font-medium text-stone-500 tabular-nums"
+                            className="pt-1 text-xs leading-5 font-medium text-[#53657f] tabular-nums"
                             dateTime={entry.at}
                           >
                             {logDate.format(new Date(entry.at))}
@@ -1428,7 +1428,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                               {entry.message}
                             </strong>
                             {details ? (
-                              <code className="mt-1 block text-xs leading-5 break-words whitespace-pre-wrap text-stone-500">
+                              <code className="mt-1 block text-xs leading-5 break-words whitespace-pre-wrap text-[#53657f]">
                                 {details}
                               </code>
                             ) : null}
@@ -1438,17 +1438,17 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                     })}
                   </ol>
                 ) : (
-                  <div className="grid min-h-44 place-items-center rounded-2xl bg-stone-100 p-6 text-center">
+                  <div className="grid min-h-44 place-items-center rounded-2xl bg-[#f0f4fa] p-6 text-center">
                     <div>
                       <strong className="text-base">No matching entries</strong>
-                      <p className="mt-1 text-sm text-stone-500">
+                      <p className="mt-1 text-sm text-[#53657f]">
                         New operational events will appear here automatically.
                       </p>
                     </div>
                   </div>
                 )}
                 {logs.length > 50 ? (
-                  <p className="px-4 pt-4 pb-2 text-xs text-stone-500">Showing the latest 50 matching entries.</p>
+                  <p className="px-4 pt-4 pb-2 text-xs text-[#53657f]">Showing the latest 50 matching entries.</p>
                 ) : null}
               </section>
             </>
@@ -1456,15 +1456,15 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
         </div>
       </section>
       {selectedSession?.finalDataUrl ? (
-        <div className="fixed inset-0 z-50 grid place-items-center overscroll-contain bg-stone-950/65 p-8 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 grid place-items-center overscroll-contain bg-[#07172f]/75 p-8 backdrop-blur-sm">
           <section
-            className="grid max-h-full w-full max-w-5xl grid-cols-[minmax(18rem,1fr)_22rem] gap-8 overflow-y-auto overscroll-contain rounded-[2.5rem] bg-stone-50 p-8 shadow-2xl"
+            className="grid max-h-full w-full max-w-5xl grid-cols-[minmax(18rem,1fr)_22rem] gap-8 overflow-y-auto overscroll-contain rounded-[2.5rem] bg-[#f8faff] p-8 shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="session-dialog-title"
             onKeyDown={trapDialogFocus}
           >
-            <div className="grid min-h-0 place-items-center overflow-hidden rounded-[2rem] bg-stone-200 p-6">
+            <div className="grid min-h-0 place-items-center overflow-hidden rounded-[2rem] bg-[#e5ebf5] p-6">
               {selectedPlaybackUrl ? (
                 <video
                   className="max-h-[70vh] max-w-full rounded-2xl bg-black shadow-xl"
@@ -1482,7 +1482,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                   <span className="mx-auto grid size-16 place-items-center rounded-full bg-white shadow-sm">
                     {selectedSession.recapStatus === 'failed' ? (
                       <svg
-                        className="size-6 text-stone-500"
+                        className="size-6 text-[#53657f]"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -1494,7 +1494,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                       </svg>
                     ) : (
                       <span
-                        className="size-6 animate-spin rounded-full border-2 border-stone-300 border-t-stone-900"
+                        className="size-6 animate-spin rounded-full border-2 border-[#d8e1ef] border-t-[#0b1f44]"
                         aria-hidden="true"
                       />
                     )}
@@ -1502,7 +1502,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                   <strong className="mt-5 block text-lg font-semibold">
                     {selectedSession.recapStatus === 'failed' ? 'Recap needs another try' : 'Creating your recap'}
                   </strong>
-                  <p className="mt-2 text-base leading-7 text-stone-500">
+                  <p className="mt-2 text-base leading-7 text-[#53657f]">
                     {selectedSession.recapStatus === 'failed'
                       ? 'The print and full recording are safe.'
                       : 'Printing and new photo sessions can continue while this finishes.'}
@@ -1521,7 +1521,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
             <div className="flex min-w-0 flex-col">
               <button
                 ref={sessionCloseButton}
-                className="grid size-14 place-items-center self-end rounded-full bg-stone-200 text-stone-700 hover:bg-stone-300 focus-visible:ring-4 focus-visible:ring-stone-400/30"
+                className="grid size-14 place-items-center self-end rounded-full bg-[#e5ebf5] text-[#2e466a] hover:bg-[#d8e1ef] focus-visible:ring-4 focus-visible:ring-[#ff2f92]/30"
                 type="button"
                 aria-label="Close session"
                 onClick={() => setSelectedSession(null)}
@@ -1541,13 +1541,13 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                 <h3 id="session-dialog-title" className="text-3xl font-semibold tracking-[-0.045em] text-balance">
                   Session
                 </h3>
-                <time className="mt-2 block text-base text-stone-500" dateTime={selectedSession.createdAt}>
+                <time className="mt-2 block text-base text-[#53657f]" dateTime={selectedSession.createdAt}>
                   {sessionDate.format(new Date(selectedSession.createdAt))}
                 </time>
                 {selectedSession.videoUrl || selectedSession.recapStatus !== 'disabled' ? (
-                  <div className="mt-7 flex rounded-[1.25rem] bg-stone-200/80 p-1.5" aria-label="Session media">
+                  <div className="mt-7 flex rounded-[1.25rem] bg-[#e7edf7] p-1.5" aria-label="Session media">
                     <button
-                      className={`min-h-14 flex-1 rounded-2xl px-4 text-base font-semibold transition-colors ${sessionMedia === 'print' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
+                      className={`min-h-14 flex-1 rounded-2xl px-4 text-base font-semibold transition-colors ${sessionMedia === 'print' ? 'bg-white text-[#0b1f44] shadow-sm' : 'text-[#53657f]'}`}
                       type="button"
                       aria-pressed={sessionMedia === 'print'}
                       onClick={() => setSessionMedia('print')}
@@ -1556,7 +1556,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                     </button>
                     {selectedSession.recapStatus !== 'disabled' ? (
                       <button
-                        className={`min-h-14 flex-1 rounded-2xl px-4 text-base font-semibold transition-colors ${sessionMedia === 'recap' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
+                        className={`min-h-14 flex-1 rounded-2xl px-4 text-base font-semibold transition-colors ${sessionMedia === 'recap' ? 'bg-white text-[#0b1f44] shadow-sm' : 'text-[#53657f]'}`}
                         type="button"
                         aria-pressed={sessionMedia === 'recap'}
                         onClick={() => setSessionMedia('recap')}
@@ -1566,7 +1566,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                     ) : null}
                     {selectedSession.videoUrl ? (
                       <button
-                        className={`min-h-14 flex-1 rounded-2xl px-4 text-base font-semibold transition-colors ${sessionMedia === 'raw' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
+                        className={`min-h-14 flex-1 rounded-2xl px-4 text-base font-semibold transition-colors ${sessionMedia === 'raw' ? 'bg-white text-[#0b1f44] shadow-sm' : 'text-[#53657f]'}`}
                         type="button"
                         aria-pressed={sessionMedia === 'raw'}
                         onClick={() => setSessionMedia('raw')}
@@ -1621,9 +1621,9 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
         </div>
       ) : null}
       {confirmNewEvent ? (
-        <div className="fixed inset-0 z-50 grid place-items-center overscroll-contain bg-stone-950/65 p-8 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 grid place-items-center overscroll-contain bg-[#07172f]/75 p-8 backdrop-blur-sm">
           <section
-            className="w-full max-w-lg rounded-[2.25rem] bg-stone-50 p-9 shadow-2xl"
+            className="w-full max-w-lg rounded-[2.25rem] bg-[#f8faff] p-9 shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="new-event-title"
@@ -1632,7 +1632,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
             <h3 id="new-event-title" className="text-3xl font-semibold tracking-[-0.045em] text-balance">
               Start a New Event?
             </h3>
-            <p className="mt-3 text-base leading-7 text-stone-500">
+            <p className="mt-3 text-base leading-7 text-[#53657f]">
               The current event and its sessions stay safely stored. You’ll return to a blank event setup.
             </p>
             <div className="mt-8 grid grid-cols-2 gap-3">

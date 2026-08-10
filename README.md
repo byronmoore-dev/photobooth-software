@@ -4,7 +4,7 @@ Production Windows photo booth for attendant-operated one-, two-, or three-photo
 
 ## Install
 
-Run `dist\Camera-Booth-Setup-0.20.1.exe`. The installer includes the x64 .NET camera bridge, Canon runtime DLLs, bundled layout-preview photographs, and the session-video encoder, so an event operator does not install either SDK separately.
+Run `dist\Camera-Booth-Setup-0.21.0.exe`. The installer includes the x64 .NET camera bridge, Canon runtime DLLs, bundled layout-preview photographs, and the session-video encoder, so an event operator does not install either SDK separately.
 
 Before opening Camera Booth:
 

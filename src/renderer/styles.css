@@ -36,7 +36,7 @@
   }
 
   :focus-visible {
-    outline: 3px solid rgb(184 164 133 / 70%);
+    outline: 3px solid rgb(255 47 146 / 72%);
     outline-offset: 3px;
   }
 }
