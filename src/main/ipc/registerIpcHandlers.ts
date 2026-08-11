@@ -12,12 +12,14 @@ import { SessionStorage } from '../storage/sessionStorage';
 import { getLayoutGeometry, renderPhotoLayout } from '../layout/renderPhotoLayout';
 import { bundledSamplePhotoPaths } from '../layout/samplePhotos';
 import { WindowsPrinterAdapter } from '../printer/WindowsPrinterAdapter';
+import { printerTestPageSvg } from '../printer/printerTestPage';
 import { UploadQueue } from '../cloud/uploadQueue';
 import { Logger } from '../logging/logger';
 import { CURRENT_RECAP_VERSION, generateRecap, RecapQueue } from '../video/recapGenerator';
 import { showWindowsTouchKeyboard } from '../system/touchKeyboard';
 import { clampCopies, eventSetupIssues, isEventActive, normalizeLayoutConfig } from '../../shared/defaults';
 import { getLayoutPreset } from '../../shared/layoutPresets';
+import { resolvePrinterSelection } from '../../shared/printer';
 import type { EventConfig, LayoutConfig, SessionMetadata } from '../../shared/types';
 
 const imageDataUrl = async (file: string) => `data:image/jpeg;base64,${(await readFile(file)).toString('base64')}`;
@@ -502,6 +504,46 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
       orientation: image.width && image.height && image.width > image.height ? 'landscape' : 'portrait',
     });
   });
+  channel('printer:testConnection', async () => {
+    const config = await events.load();
+    const availablePrinters = await printer.listPrinters();
+    const selection = resolvePrinterSelection(availablePrinters, config.printer.name);
+    if (selection.missing) {
+      throw new Error(
+        selection.explicit
+          ? 'The selected printer is no longer available in Windows.'
+          : 'Windows did not report an available printer.',
+      );
+    }
+
+    const preset = getLayoutPreset(config.layout.preset);
+    await mkdir(previewRoot, { recursive: true });
+    const testDirectory = await mkdtemp(path.join(previewRoot, 'printer-test-'));
+    const outputPath = path.join(testDirectory, 'printer-test.jpg');
+    try {
+      const svg = printerTestPageSvg({
+        printerName: selection.printer?.displayName || selection.printer?.name || 'Windows default printer',
+        layoutName: preset.name,
+        printSize: preset.printSize,
+        orientation: preset.orientation,
+        createdAt: new Date(),
+      });
+      await sharp(Buffer.from(svg)).jpeg({ quality: 95, chromaSubsampling: '4:4:4' }).toFile(outputPath);
+      const result = await printer.testPrint({
+        imagePath: outputPath,
+        printerName: config.printer.name,
+        paperSize: config.printer.paperSize,
+        orientation: preset.orientation,
+      });
+      logger.info('Printer connection test completed', {
+        printer: config.printer.name || 'Windows default printer',
+        submitted: result.submitted,
+      });
+      return result;
+    } finally {
+      await rm(testDirectory, { recursive: true, force: true });
+    }
+  });
 
   channel('layout:preview', async (input: LayoutConfig) => {
     const config = normalizeLayoutConfig(input);
@@ -655,15 +697,16 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
       }
     }
     const printers = await printer.listPrinters();
-    const printerReady = config.printer.name
-      ? printers.some((item) => item.name === config.printer.name)
-      : printers.length > 0;
+    const printerSelection = resolvePrinterSelection(printers, config.printer.name);
+    const printerReady = !printerSelection.missing;
     results.push({
       label: 'Windows printer',
       status: printerReady ? 'pass' : 'warning',
       detail: printerReady
-        ? config.printer.name || 'Windows default printer'
-        : 'Choose an available printer before the event.',
+        ? printerSelection.printer?.displayName || printerSelection.printer?.name || 'Windows default printer'
+        : printerSelection.explicit
+          ? 'The selected printer is no longer available in Windows.'
+          : 'Choose an available printer before the event.',
     });
     const pending = (await sessions.all(config)).filter(
       (item) => item.uploadEnabled && item.uploadStatus !== 'complete',

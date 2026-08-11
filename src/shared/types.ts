@@ -101,6 +101,8 @@ export interface CameraStatus {
 
 export interface PrinterInfo {
   name: string;
+  displayName?: string;
+  description?: string;
   isDefault: boolean;
   status?: number;
 }
@@ -227,6 +229,7 @@ export interface BoothApi {
     list(): Promise<PrinterInfo[]>;
     print(sessionId: string, copies: number): Promise<PrintJobResult>;
     testPrint(path: string): Promise<PrintJobResult>;
+    testConnection(): Promise<PrintJobResult>;
   };
   layout: {
     preview(config: LayoutConfig): Promise<{ path: string; dataUrl: string }>;

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { eventDraftIssues, isEventActive, isEventDraftComplete } from '@shared/defaults';
 import { applyLayoutPreset, DEFAULT_LAYOUT_PRESET, getLayoutPreset, LAYOUT_PRESETS } from '@shared/layoutPresets';
+import { printerLabel, resolvePrinterSelection } from '@shared/printer';
 import type {
   DiagnosticsResult,
   EventConfig,
@@ -247,6 +248,67 @@ function RailArtworkControl({
   );
 }
 
+function PrinterChoice({
+  title,
+  detail,
+  selected,
+  onSelect,
+}: {
+  title: string;
+  detail: string;
+  selected: boolean;
+  onSelect(): void;
+}) {
+  return (
+    <button
+      className={`grid min-h-24 grid-cols-[auto_1fr_auto] items-center gap-4 rounded-[1.3rem] px-5 text-left transition-[background-color,transform,box-shadow] active:scale-[0.99] ${selected ? 'bg-[#0b1f44] text-white shadow-[inset_0_0_0_2px_#ff2f92]' : 'bg-[#edf2f9] text-[#0b1f44] hover:bg-[#e3ebf5]'}`}
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+    >
+      <span
+        className={`grid size-11 place-items-center rounded-full ${selected ? 'bg-white/10' : 'bg-white'}`}
+        aria-hidden="true"
+      >
+        <svg
+          className="size-5"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z" />
+        </svg>
+      </span>
+      <span className="min-w-0">
+        <strong className="block truncate text-base">{title}</strong>
+        <span className={`mt-1 block truncate text-xs ${selected ? 'text-[#b9c6d9]' : 'text-[#53657f]'}`}>
+          {detail}
+        </span>
+      </span>
+      <span
+        className={`size-6 rounded-full ${selected ? 'border-[7px] border-[#ff2f92] bg-white' : 'border-2 border-[#b8c6d8]'}`}
+        aria-hidden="true"
+      />
+    </button>
+  );
+}
+
+function PrinterQuantitySetting({ label, detail, children }: { label: string; detail: string; children: ReactNode }) {
+  return (
+    <div className="rounded-[1.5rem] bg-[#f4f7fc] p-5">
+      <div className="mb-4 px-1">
+        <strong className="block text-base">{label}</strong>
+        <span className="mt-1 block text-xs text-[#53657f]">{detail}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 const humanStatus = (status: string) => status.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const logDate = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' });
 const sessionDate = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -288,6 +350,8 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
   const [draft, setDraft] = useState(config);
   const [tab, setTab] = useState<Tab>('Set Up');
   const [printers, setPrinters] = useState<PrinterInfo[]>([]);
+  const [printerRefreshing, setPrinterRefreshing] = useState(false);
+  const [printerScanError, setPrinterScanError] = useState('');
   const [preview, setPreview] = useState<{ path: string; dataUrl: string } | null>(null);
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
@@ -327,6 +391,18 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
     }
   };
 
+  const refreshPrinterList = async (showActivity = true) => {
+    if (showActivity) setPrinterRefreshing(true);
+    try {
+      setPrinters(await window.booth.printer.list());
+      setPrinterScanError('');
+    } catch (reason) {
+      setPrinterScanError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      if (showActivity) setPrinterRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     Promise.all([
@@ -336,6 +412,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
       .then(([availablePrinters, sessions]) => {
         if (!active) return;
         setPrinters(availablePrinters);
+        setPrinterScanError('');
         setRecent(sessions);
       })
       .catch((reason) => {
@@ -345,6 +422,13 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (tab !== 'Printer') return;
+    void refreshPrinterList();
+    const timer = window.setInterval(() => void refreshPrinterList(false), 15_000);
+    return () => window.clearInterval(timer);
+  }, [tab]);
 
   useEffect(() => {
     if (tab !== 'Logs') return;
@@ -596,6 +680,24 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
     }
   };
 
+  const testPrinterConnection = async () => {
+    if (busy === 'printer-test') return;
+    setBusy('printer-test');
+    setMessage('');
+    try {
+      await queueSave(draft);
+      const result = await window.booth.printer.testConnection();
+      if (!result.submitted) throw new Error(result.message || 'Windows rejected the test print.');
+      setMessageTone('success');
+      setMessageTab('Printer');
+      setMessage('Test page sent to the printer.');
+    } catch (reason) {
+      showError(reason);
+    } finally {
+      setBusy('');
+    }
+  };
+
   const saveLabel =
     saveStatus === 'saving'
       ? 'Saving…'
@@ -614,6 +716,11 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
         ? selectedSession?.videoUrl
         : undefined;
   const draftIssues = newEventDraft ? eventDraftIssues(newEventDraft) : [];
+  const printerSelection = resolvePrinterSelection(printers, draft.printer.name);
+  const printerDetected = !printerSelection.missing;
+  const activePrinterName = printerSelection.printer
+    ? printerLabel(printerSelection.printer)
+    : draft.printer.name || 'No printer detected';
   return (
     <main className="grid h-full grid-cols-[19rem_minmax(0,1fr)] overflow-x-hidden bg-[#f4f7fc] text-[#0b1f44]">
       <a
@@ -1181,73 +1288,135 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
           ) : null}
 
           {tab === 'Printer' ? (
-            <>
-              <section className={cardClass}>
-                <h3 className="text-2xl font-semibold tracking-[-0.035em]">Windows printer</h3>
-                <p className="mt-2 mb-8 text-base leading-7 text-[#53657f]">
-                  Print through the installed Windows driver.
-                </p>
-                <div className="grid gap-5 md:grid-cols-2">
-                  <Field label="Active printer">
-                    <select
-                      className={inputClass}
-                      name="printerName"
-                      value={draft.printer.name}
-                      onChange={(event) => patch('printer', { ...draft.printer, name: event.target.value })}
+            <section className={cardClass}>
+              <div className="flex flex-wrap items-start justify-between gap-5">
+                <div>
+                  <h3 className="text-2xl font-semibold tracking-[-0.035em]">Printer</h3>
+                  <p className="mt-2 text-base leading-7 text-[#53657f]">
+                    Select a Windows printer and verify it before the event.
+                  </p>
+                </div>
+                <button
+                  className={quietActionClass}
+                  type="button"
+                  disabled={printerRefreshing}
+                  onClick={() => void refreshPrinterList()}
+                >
+                  {printerRefreshing ? 'Checking…' : 'Refresh printers'}
+                </button>
+              </div>
+
+              <div
+                className={`relative mt-8 overflow-hidden rounded-[1.75rem] p-7 ${printerDetected ? 'bg-[#0b1f44] text-white' : 'bg-[#fff0f7] text-[#0b1f44]'}`}
+                aria-live="polite"
+              >
+                <div className="relative z-10 flex flex-wrap items-end justify-between gap-6">
+                  <div className="min-w-0">
+                    <span
+                      className={`inline-flex min-h-9 items-center gap-2 rounded-full px-4 text-xs font-semibold tracking-[0.08em] uppercase ${printerDetected ? 'bg-white/10 text-white' : 'bg-white text-[#c51665]'}`}
                     >
-                      <option value="">Windows default printer</option>
-                      {printers.map((printer) => (
-                        <option key={printer.name} value={printer.name}>
-                          {printer.name}
-                          {printer.isDefault ? ' (default)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <div className="grid gap-2">
-                    <span className="pl-1 text-sm font-semibold text-[#415a7b]">Print format</span>
-                    <div className="flex min-h-16 items-center rounded-[1.25rem] bg-[#f0f4fa] px-5 text-base font-medium">
-                      {getLayoutPreset(draft.layout.preset).printSize} ·{' '}
+                      <i className={`size-2.5 rounded-full ${printerDetected ? 'bg-[#ff2f92]' : 'bg-[#c51665]'}`} />
+                      {printerDetected ? 'Detected by Windows' : 'Needs attention'}
+                    </span>
+                    <strong className="mt-5 block max-w-2xl truncate text-3xl font-semibold tracking-[-0.04em]">
+                      {activePrinterName}
+                    </strong>
+                    <span className={`mt-2 block text-sm ${printerDetected ? 'text-[#b9c6d9]' : 'text-[#8d3b62]'}`}>
+                      {printerSelection.explicit ? 'Selected printer' : 'Following the Windows default'}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div
+                      className={`min-h-14 rounded-[1.1rem] px-5 py-3 text-sm ${printerDetected ? 'bg-white/10 text-[#d8e1ef]' : 'bg-white text-[#53657f]'}`}
+                    >
+                      <strong className={`block ${printerDetected ? 'text-white' : 'text-[#0b1f44]'}`}>
+                        {getLayoutPreset(draft.layout.preset).printSize}
+                      </strong>
                       {getLayoutPreset(draft.layout.preset).orientation === 'landscape' ? 'Landscape' : 'Portrait'}
                     </div>
+                    <button
+                      className={`min-h-14 rounded-[1.1rem] px-6 text-base font-semibold transition-[background-color,transform] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${printerDetected ? 'bg-[#ff2f92] text-white hover:bg-[#e92783]' : 'bg-[#0b1f44] text-white'}`}
+                      type="button"
+                      disabled={!printerDetected || busy === 'printer-test'}
+                      onClick={() => void testPrinterConnection()}
+                    >
+                      {busy === 'printer-test' ? 'Sending…' : 'Print test page'}
+                    </button>
                   </div>
-                  <Field label="Default copies">
-                    <input
-                      className={inputClass}
-                      name="defaultCopies"
-                      type="number"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      min="1"
-                      max="20"
-                      value={draft.printer.defaultCopies}
-                      onChange={(event) =>
-                        patch('printer', { ...draft.printer, defaultCopies: Number(event.target.value) })
-                      }
-                    />
-                  </Field>
-                  <Field label="Maximum copies">
-                    <input
-                      className={inputClass}
-                      name="maximumCopies"
-                      type="number"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      min="1"
-                      max="20"
-                      value={draft.printer.maxCopies}
-                      onChange={(event) =>
-                        patch('printer', { ...draft.printer, maxCopies: Number(event.target.value) })
-                      }
-                    />
-                  </Field>
                 </div>
-              </section>
-              <div className="max-w-5xl rounded-3xl bg-[#e7edf7] p-6 text-sm leading-6 text-[#415a7b]">
-                The booth confirms when Windows accepts a print job. Physical completion depends on the printer driver
-                and hardware.
+                {printerDetected ? (
+                  <span
+                    className="pointer-events-none absolute -top-24 -right-20 size-72 rounded-full border-[52px] border-white/[0.035]"
+                    aria-hidden="true"
+                  />
+                ) : null}
               </div>
-            </>
+
+              {printerScanError ? (
+                <div className="mt-4 rounded-[1.2rem] bg-[#fff0f7] px-5 py-4 text-sm text-[#9c245b]" role="alert">
+                  Windows printer scan failed. {printerScanError}
+                </div>
+              ) : null}
+
+              <div className="mt-9 flex items-center justify-between gap-4">
+                <h4 className="text-lg font-semibold tracking-[-0.025em]">Available printers</h4>
+                <span className="rounded-full bg-[#edf2f9] px-3 py-1.5 text-xs font-semibold text-[#53657f]">
+                  {printers.length} detected
+                </span>
+              </div>
+              <div
+                className="mt-4 grid max-h-[28rem] gap-3 overflow-y-auto overscroll-contain pr-1 lg:grid-cols-2"
+                role="radiogroup"
+                aria-label="Active printer"
+              >
+                <PrinterChoice
+                  title="Windows default"
+                  detail={
+                    printers.find((printer) => printer.isDefault)
+                      ? printerLabel(printers.find((printer) => printer.isDefault)!)
+                      : 'Follows the system selection'
+                  }
+                  selected={draft.printer.name === ''}
+                  onSelect={() => patch('printer', { ...draft.printer, name: '' })}
+                />
+                {printers.map((printer) => (
+                  <PrinterChoice
+                    key={printer.name}
+                    title={printerLabel(printer)}
+                    detail={printer.isDefault ? 'Windows default' : printer.description || 'Windows print device'}
+                    selected={draft.printer.name === printer.name}
+                    onSelect={() => patch('printer', { ...draft.printer, name: printer.name })}
+                  />
+                ))}
+              </div>
+
+              <div className="mt-9 grid gap-4 md:grid-cols-2">
+                <PrinterQuantitySetting label="Default copies" detail="Starting quantity on the print screen">
+                  <PrintQuantity
+                    value={draft.printer.defaultCopies}
+                    max={draft.printer.maxCopies}
+                    onChange={(defaultCopies) => patch('printer', { ...draft.printer, defaultCopies })}
+                  />
+                </PrinterQuantitySetting>
+                <PrinterQuantitySetting label="Maximum copies" detail="Attendant limit for one print request">
+                  <PrintQuantity
+                    value={draft.printer.maxCopies}
+                    max={20}
+                    onChange={(maxCopies) =>
+                      patch('printer', {
+                        ...draft.printer,
+                        maxCopies,
+                        defaultCopies: Math.min(draft.printer.defaultCopies, maxCopies),
+                      })
+                    }
+                  />
+                </PrinterQuantitySetting>
+              </div>
+
+              <p className="mt-7 px-1 text-sm leading-6 text-[#53657f]">
+                Detection confirms the Windows driver is available. A successful test confirms Windows accepted the job.
+              </p>
+            </section>
           ) : null}
 
           {tab === 'Display' ? (

@@ -28,6 +28,8 @@ export class WindowsPrinterAdapter implements PrinterAdapter {
       const options = printer.options as Record<string, unknown>;
       return {
         name: printer.name,
+        displayName: printer.displayName,
+        description: printer.description,
         isDefault: String(options.isDefault ?? options['printer-is-default']).toLowerCase() === 'true',
       };
     });

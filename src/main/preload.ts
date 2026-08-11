@@ -41,6 +41,7 @@ const api: BoothApi = {
     list: () => invoke('printer:list'),
     print: (id, copies) => invoke('printer:print', id, copies),
     testPrint: (path) => invoke('printer:testPrint', path),
+    testConnection: () => invoke('printer:testConnection'),
   },
   layout: {
     preview: (config) => invoke('layout:preview', config),
