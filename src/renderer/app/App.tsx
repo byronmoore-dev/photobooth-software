@@ -174,15 +174,14 @@ export function App() {
       }
     };
     try {
-      const initialAutofocus = window.booth.camera.autofocus();
       current = await window.booth.session.create(false);
       setSession(current);
       current = await startSessionVideo(current);
       setSession(current);
-      await initialAutofocus.catch(() => undefined);
       for (let index = 0; index < photoCount; index++) {
         let photo: CapturedPhoto | null = null;
         while (!photo) {
+          const earlyAutofocus = window.booth.camera.autofocus().catch(() => undefined);
           setState('COUNTDOWN');
           let capture: Promise<CapturedPhoto> | null = null;
           for (let number = config.capture.countdownSeconds; number >= 1; number--) {
@@ -190,6 +189,7 @@ export function App() {
             const tickEndsAt = performance.now() + 1_000;
             if (number === 1) {
               await wait(1_000 - AUTOFOCUS_LEAD_MS);
+              await earlyAutofocus;
               capture = window.booth.camera.capture(current.id, index);
             }
             await wait(Math.max(0, tickEndsAt - performance.now()));

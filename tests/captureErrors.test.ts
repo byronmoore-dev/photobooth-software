@@ -13,6 +13,13 @@ describe('capture error classification', () => {
         new Error('The Canon photo did not include flash confirmation. Check that the built-in flash is raised.'),
       ),
     ).toBe(true);
+    expect(
+      isRecoverableFlashError(
+        new Error(
+          "Error invoking remote method 'camera:capture': Error: The Canon flash did not fire. Wait for it to charge.",
+        ),
+      ),
+    ).toBe(true);
   });
 
   it('leaves camera and transfer failures on the fatal error path', () => {
