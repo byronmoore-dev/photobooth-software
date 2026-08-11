@@ -1,4 +1,4 @@
-import type { LayoutConfig, LayoutPresetId, PhotoCount } from './types';
+import type { LayoutConfig, LayoutPresetId, PhotoCount, RailArtworkCache } from './types';
 
 export interface LayoutPresetSummary {
   id: LayoutPresetId;
@@ -77,15 +77,24 @@ export const DEFAULT_LAYOUT_PRESET = LAYOUT_PRESETS[2];
 export const getLayoutPreset = (id: LayoutPresetId) =>
   LAYOUT_PRESETS.find((preset) => preset.id === id) ?? DEFAULT_LAYOUT_PRESET;
 
-export const applyLayoutPreset = (current: LayoutConfig, id: LayoutPresetId): LayoutConfig => {
+export const applyLayoutPreset = (
+  current: LayoutConfig,
+  id: LayoutPresetId,
+  artworkCache?: RailArtworkCache,
+): LayoutConfig => {
   const preset = getLayoutPreset(id);
+  const rememberedArtwork =
+    artworkCache?.[preset.id] ??
+    (current.preset === preset.id && current.railImageAssetId
+      ? { assetId: current.railImageAssetId, name: current.railImageName }
+      : undefined);
   return {
     ...current,
     preset: preset.id,
     width: preset.width,
     height: preset.height,
     ...preset.defaults,
-    railImageAssetId: '',
-    railImageName: '',
+    railImageAssetId: rememberedArtwork?.assetId ?? '',
+    railImageName: rememberedArtwork?.name ?? '',
   };
 };

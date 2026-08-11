@@ -13,6 +13,13 @@ export type AppState =
 export type LayoutPresetId = 'side-rail-one-landscape' | 'center-rail-two-stack' | 'side-rail-three-stack';
 export type PhotoCount = 1 | 2 | 3;
 
+export interface RailArtworkSelection {
+  assetId: string;
+  name: string;
+}
+
+export type RailArtworkCache = Partial<Record<LayoutPresetId, RailArtworkSelection>>;
+
 interface LayoutConfigBase {
   width: number;
   height: number;
@@ -39,7 +46,7 @@ export type LayoutConfig =
   SideRailOneLandscapeLayoutConfig | CenterRailTwoStackLayoutConfig | SideRailThreeStackLayoutConfig;
 
 export interface EventConfig {
-  schemaVersion: 8;
+  schemaVersion: 9;
   id: string;
   createdAt: string;
   eventDate: string;
@@ -54,6 +61,7 @@ export interface EventConfig {
     camera: 'canon';
   };
   layout: LayoutConfig;
+  railArtworkCache: RailArtworkCache;
   printer: {
     name: string;
     paperSize: string;

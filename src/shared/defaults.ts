@@ -1,5 +1,5 @@
-import type { EventConfig, LayoutConfig, LayoutPresetId, SessionMetadata } from './types';
-import { DEFAULT_LAYOUT_PRESET, getLayoutPreset } from './layoutPresets';
+import type { EventConfig, LayoutConfig, LayoutPresetId, RailArtworkCache, SessionMetadata } from './types';
+import { DEFAULT_LAYOUT_PRESET, getLayoutPreset, LAYOUT_PRESETS } from './layoutPresets';
 
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -28,7 +28,7 @@ const validDateInput = (value: unknown) => {
 };
 
 export const createDefaultConfig = (baseFolder: string): EventConfig => ({
-  schemaVersion: 8,
+  schemaVersion: 9,
   id: '',
   createdAt: '',
   eventDate: '',
@@ -51,6 +51,7 @@ export const createDefaultConfig = (baseFolder: string): EventConfig => ({
     railImageAssetId: '',
     railImageName: '',
   },
+  railArtworkCache: {},
   printer: {
     name: '',
     paperSize: '4 × 6 in',
@@ -69,6 +70,21 @@ export const createDefaultConfig = (baseFolder: string): EventConfig => ({
     publicBaseUrl: '',
   },
 });
+
+const normalizeRailArtworkCache = (value: unknown): RailArtworkCache => {
+  const source = record(value);
+  const cache: RailArtworkCache = {};
+  for (const preset of LAYOUT_PRESETS) {
+    const selection = record(source[preset.id]);
+    const assetId = text(selection.assetId);
+    if (!/^[0-9a-f-]{36}$/i.test(assetId)) continue;
+    cache[preset.id] = {
+      assetId,
+      name: text(selection.name).trim().slice(0, 180),
+    };
+  }
+  return cache;
+};
 
 export const normalizeLayoutConfig = (value: unknown, fallback?: LayoutConfig): LayoutConfig => {
   const defaults = fallback ?? createDefaultConfig('').layout;
@@ -97,6 +113,13 @@ export const normalizeEventConfig = (value: unknown, baseFolder: string): EventC
   const description = text(source.description).trim().slice(0, 500);
   const layoutSource = record(source.layout);
   const layout = normalizeLayoutConfig(layoutSource, defaults.layout);
+  const railArtworkCache = normalizeRailArtworkCache(source.railArtworkCache);
+  if (layout.railImageAssetId) {
+    railArtworkCache[layout.preset] = {
+      assetId: layout.railImageAssetId,
+      name: layout.railImageName,
+    };
+  }
   const id = text(source.id)
     .trim()
     .replace(/[^a-zA-Z0-9_-]+/g, '-')
@@ -110,7 +133,7 @@ export const normalizeEventConfig = (value: unknown, baseFolder: string): EventC
       : ''
     : storedCreatedAt;
   return {
-    schemaVersion: 8,
+    schemaVersion: 9,
     id,
     createdAt,
     eventDate: storedEventDate,
@@ -131,6 +154,7 @@ export const normalizeEventConfig = (value: unknown, baseFolder: string): EventC
       camera: 'canon',
     },
     layout,
+    railArtworkCache,
     printer: {
       name: text(printer.name).slice(0, 260),
       paperSize: defaults.printer.paperSize,

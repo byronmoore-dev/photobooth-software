@@ -12,6 +12,7 @@ import {
   normalizeSessionMetadata,
   requireEventId,
 } from '../src/shared/defaults';
+import { applyLayoutPreset } from '../src/shared/layoutPresets';
 
 describe('event configuration', () => {
   it('starts without fabricated event details', () => {
@@ -19,6 +20,7 @@ describe('event configuration', () => {
     expect(defaults.id).toBe('');
     expect(defaults.description).toBe('');
     expect(defaults.eventDate).toBe('');
+    expect(defaults.railArtworkCache).toEqual({});
     expect(defaults.capture).toMatchObject({ countdownSeconds: 8, previewMs: 2000, sessionVideoEnabled: false });
     expect(defaults.capture).not.toHaveProperty('transitionMs');
     expect(defaults.layout).not.toHaveProperty('text');
@@ -67,7 +69,7 @@ describe('event configuration', () => {
       },
       'C:\\Events',
     );
-    expect(migrated.schemaVersion).toBe(8);
+    expect(migrated.schemaVersion).toBe(9);
     expect(migrated.createdAt).toBe('');
     expect(migrated.eventDate).toBe('');
     expect(migrated.layout).toMatchObject({
@@ -77,6 +79,40 @@ describe('event configuration', () => {
     });
     expect(migrated.layout).not.toHaveProperty('text');
     expect(migrated.layout).not.toHaveProperty('detail');
+  });
+
+  it('remembers one rail artwork per layout and backfills the active legacy artwork', () => {
+    const firstAsset = '11111111-1111-4111-8111-111111111111';
+    const secondAsset = '22222222-2222-4222-8222-222222222222';
+    const normalized = normalizeEventConfig(
+      {
+        ...createDefaultConfig('C:\\Events'),
+        schemaVersion: 8,
+        layout: {
+          ...createDefaultConfig('').layout,
+          railImageAssetId: firstAsset,
+          railImageName: 'trio.png',
+        },
+        railArtworkCache: {
+          'center-rail-two-stack': { assetId: secondAsset, name: 'pair.png' },
+          invalid: { assetId: 'not-an-id', name: 'invalid.png' },
+        },
+      },
+      'C:\\Events',
+    );
+
+    expect(normalized.schemaVersion).toBe(9);
+    expect(normalized.railArtworkCache).toEqual({
+      'center-rail-two-stack': { assetId: secondAsset, name: 'pair.png' },
+      'side-rail-three-stack': { assetId: firstAsset, name: 'trio.png' },
+    });
+
+    const pairLayout = applyLayoutPreset(normalized.layout, 'center-rail-two-stack', normalized.railArtworkCache);
+    expect(pairLayout).toMatchObject({
+      preset: 'center-rail-two-stack',
+      railImageAssetId: secondAsset,
+      railImageName: 'pair.png',
+    });
   });
 
   it('migrates the old untouched capture timing defaults and removes the photo pause', () => {

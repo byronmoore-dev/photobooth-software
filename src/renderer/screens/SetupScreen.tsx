@@ -7,6 +7,8 @@ import type {
   LayoutConfig,
   LogEntry,
   PrinterInfo,
+  RailArtworkCache,
+  RailArtworkSelection,
   SessionSummary,
 } from '@shared/types';
 import { PrintQuantity } from '../components/PrintQuantity';
@@ -139,10 +141,12 @@ function LayoutThumbnail({
 
 function LayoutPicker({
   layout,
+  artworkCache,
   onChange,
   compact = false,
 }: {
   layout: LayoutConfig;
+  artworkCache: RailArtworkCache;
   onChange(layout: LayoutConfig): void;
   compact?: boolean;
 }) {
@@ -161,7 +165,7 @@ function LayoutPicker({
             type="button"
             role="radio"
             aria-checked={selected}
-            onClick={() => onChange(applyLayoutPreset(layout, preset.id))}
+            onClick={() => onChange(applyLayoutPreset(layout, preset.id, artworkCache))}
           >
             <LayoutThumbnail preset={preset.id} selected={selected} compact={compact} />
             <span className={compact ? 'min-w-0' : 'contents'}>
@@ -467,18 +471,21 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
 
   const chooseRailArtwork = async (
     layout: LayoutConfig,
-    onSelected: (layout: LayoutConfig) => void,
+    onSelected: (layout: LayoutConfig, artwork: RailArtworkSelection) => void,
     destination: Tab,
   ) => {
     setBusy('rail-artwork');
     try {
       const artwork = await window.booth.layout.chooseRailImage(layout);
       if (!artwork) return;
-      onSelected({
-        ...layout,
-        railImageAssetId: artwork.assetId,
-        railImageName: artwork.name,
-      });
+      onSelected(
+        {
+          ...layout,
+          railImageAssetId: artwork.assetId,
+          railImageName: artwork.name,
+        },
+        artwork,
+      );
       setMessageTone('success');
       setMessageTab(destination);
       setMessage('Rail artwork added.');
@@ -572,7 +579,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
       createdAt: '',
       eventDate: '',
       description: '',
-      layout: applyLayoutPreset(draft.layout, DEFAULT_LAYOUT_PRESET.id),
+      layout: applyLayoutPreset(draft.layout, DEFAULT_LAYOUT_PRESET.id, draft.railArtworkCache),
     });
     setTab('Set Up');
   };
@@ -810,6 +817,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                     <h4 className="text-base font-semibold tracking-[-0.02em]">Print layout</h4>
                     <LayoutPicker
                       layout={newEventDraft.layout}
+                      artworkCache={newEventDraft.railArtworkCache}
                       onChange={(layout) => patchNewEvent('layout', layout)}
                       compact
                     />
@@ -820,7 +828,19 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                       onChoose={() =>
                         void chooseRailArtwork(
                           newEventDraft.layout,
-                          (layout) => patchNewEvent('layout', layout),
+                          (layout, artwork) =>
+                            setNewEventDraft((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    layout,
+                                    railArtworkCache: {
+                                      ...current.railArtworkCache,
+                                      [layout.preset]: artwork,
+                                    },
+                                  }
+                                : current,
+                            ),
                           'Set Up',
                         )
                       }
@@ -1064,12 +1084,30 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                 <p className="mt-2 mb-8 text-base leading-7 text-[#53657f]">
                   Choose the session format, then add the finished artwork for its rail.
                 </p>
-                <LayoutPicker layout={draft.layout} onChange={(layout) => patch('layout', layout)} />
+                <LayoutPicker
+                  layout={draft.layout}
+                  artworkCache={draft.railArtworkCache}
+                  onChange={(layout) => patch('layout', layout)}
+                />
                 <div className="mt-7">
                   <RailArtworkControl
                     layout={draft.layout}
                     busy={busy === 'rail-artwork'}
-                    onChoose={() => void chooseRailArtwork(draft.layout, (layout) => patch('layout', layout), 'Layout')}
+                    onChoose={() =>
+                      void chooseRailArtwork(
+                        draft.layout,
+                        (layout, artwork) =>
+                          setDraft((current) => ({
+                            ...current,
+                            layout,
+                            railArtworkCache: {
+                              ...current.railArtworkCache,
+                              [layout.preset]: artwork,
+                            },
+                          })),
+                        'Layout',
+                      )
+                    }
                   />
                 </div>
               </section>
