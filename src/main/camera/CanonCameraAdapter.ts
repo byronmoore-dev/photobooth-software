@@ -175,6 +175,9 @@ export class CanonCameraAdapter implements CameraAdapter {
   async stopLiveView() {
     if (this.child) this.lastStatus = await this.command<CameraStatus>('stopLiveView');
   }
+  async autofocus() {
+    this.lastStatus = await this.command<CameraStatus>('autofocus');
+  }
   async capture(destinationPath: string): Promise<CapturedPhoto> {
     const result = await this.command<{ path: string; capturedAt: string }>(
       'capture',

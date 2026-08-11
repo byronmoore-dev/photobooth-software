@@ -174,10 +174,12 @@ export function App() {
       }
     };
     try {
+      const initialAutofocus = window.booth.camera.autofocus();
       current = await window.booth.session.create(false);
       setSession(current);
       current = await startSessionVideo(current);
       setSession(current);
+      await initialAutofocus.catch(() => undefined);
       for (let index = 0; index < photoCount; index++) {
         let photo: CapturedPhoto | null = null;
         while (!photo) {

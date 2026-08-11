@@ -14,6 +14,7 @@ const api: BoothApi = {
     connect: () => invoke('camera:connect'),
     disconnect: () => invoke('camera:disconnect'),
     startLiveView: () => invoke('camera:startLiveView'),
+    autofocus: () => invoke('camera:autofocus'),
     capture: (id, index) => invoke('camera:capture', id, index),
     status: () => invoke('camera:status'),
     onFrame: (callback) => {

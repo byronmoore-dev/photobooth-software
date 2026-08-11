@@ -19,6 +19,7 @@ internal sealed class CameraHost : IDisposable
     // The renderer starts this atomic operation 500 ms before countdown zero.
     // Sending the full press just before zero compensates for T6i shutter/pre-flash latency.
     private const int FocusHoldMilliseconds = 450;
+    private const int SessionFocusHoldMilliseconds = 650;
     private readonly ConcurrentQueue<CommandEnvelope> commands = new();
     private readonly ConcurrentQueue<IntPtr> transferItems = new();
     private readonly object outputLock = new();
@@ -94,6 +95,7 @@ internal sealed class CameraHost : IDisposable
                     case "startLiveView": StartLiveView(); Respond(command.Id, Status()); break;
                     case "stopLiveView": StopLiveView(); Respond(command.Id, Status()); break;
                     case "status": Respond(command.Id, Status()); break;
+                    case "autofocus": Autofocus(); Respond(command.Id, Status()); break;
                     case "capture": BeginCapture(command); break;
                     case "startRecording": StartRecording(command); break;
                     case "stopRecording": StopRecording(command); break;
@@ -205,6 +207,22 @@ internal sealed class CameraHost : IDisposable
             if (++consecutiveFrameErrors == 5) Write(new { type = "cameraError", error = ex.Message });
         }
         finally { if (image != IntPtr.Zero) Canon.EdsRelease(image); if (stream != IntPtr.Zero) Canon.EdsRelease(stream); }
+    }
+
+    private void Autofocus()
+    {
+        RequireConnected();
+        try
+        {
+            Check(Canon.EdsSendCommand(camera, Canon.CameraCommand_PressShutterButton, (int)Canon.EdsShutterButton.CameraCommand_ShutterButton_Halfway), "start autofocus");
+            Thread.Sleep(SessionFocusHoldMilliseconds);
+            Check(Canon.EdsSendCommand(camera, Canon.CameraCommand_PressShutterButton, (int)Canon.EdsShutterButton.CameraCommand_ShutterButton_OFF), "release autofocus");
+        }
+        catch
+        {
+            Canon.EdsSendCommand(camera, Canon.CameraCommand_PressShutterButton, (int)Canon.EdsShutterButton.CameraCommand_ShutterButton_OFF);
+            throw;
+        }
     }
 
     private void BeginCapture(CommandEnvelope command)

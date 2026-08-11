@@ -313,6 +313,9 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
     const frame = await adapter.startLiveView();
     return { status: await adapter.getStatus(), frame };
   });
+  channel('camera:autofocus', async () => {
+    await (await getCamera()).autofocus();
+  });
   channel('camera:status', async () => (await getCamera()).getStatus());
 
   channel('session:create', async (test = false) => {

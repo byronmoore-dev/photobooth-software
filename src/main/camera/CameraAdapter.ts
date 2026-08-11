@@ -20,6 +20,7 @@ export interface CameraAdapter {
   disconnect(): Promise<void>;
   startLiveView(): Promise<string>;
   stopLiveView(): Promise<void>;
+  autofocus(): Promise<void>;
   capture(destinationPath: string): Promise<CapturedPhoto>;
   startRecording(ffmpegPath: string, destinationPath: string): Promise<VideoRecordingStart>;
   stopRecording(): Promise<VideoRecordingResult>;

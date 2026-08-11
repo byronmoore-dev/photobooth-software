@@ -216,6 +216,7 @@ export interface BoothApi {
     connect(): Promise<CameraStatus>;
     disconnect(): Promise<void>;
     startLiveView(): Promise<{ status: CameraStatus; frame: string }>;
+    autofocus(): Promise<void>;
     capture(sessionId: string, index: number): Promise<CapturedPhoto>;
     status(): Promise<CameraStatus>;
     onFrame(callback: (frame: string) => void): () => void;
