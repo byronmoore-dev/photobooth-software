@@ -825,14 +825,22 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                         )
                       }
                     />
-                    <Toggle
-                      checked={newEventDraft.capture.sessionVideoEnabled}
-                      onChange={(sessionVideoEnabled) =>
-                        patchNewEvent('capture', { ...newEventDraft.capture, sessionVideoEnabled })
-                      }
-                      label="Enable recording"
-                      description="Record each session and create its recap video"
-                    />
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Toggle
+                        checked={newEventDraft.capture.sessionVideoEnabled}
+                        onChange={(sessionVideoEnabled) =>
+                          patchNewEvent('capture', { ...newEventDraft.capture, sessionVideoEnabled })
+                        }
+                        label="Enable recording"
+                        description="Record each session and create its recap video"
+                      />
+                      <Toggle
+                        checked={newEventDraft.sharing.enabled}
+                        onChange={(enabled) => patchNewEvent('sharing', { ...newEventDraft.sharing, enabled })}
+                        label="Enable cloud sharing"
+                        description="Coming soon · photos stay local for now"
+                      />
+                    </div>
                   </div>
                 </div>
                 <div className="mt-10 flex items-center gap-4">
@@ -1228,6 +1236,7 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                 checked={draft.sharing.enabled}
                 onChange={(enabled) => patch('sharing', { ...draft.sharing, enabled })}
                 label="Enable cloud sharing"
+                description="Requires a configured sharing service"
               />
               {draft.sharing.enabled ? (
                 <div className="mt-4 grid gap-3">

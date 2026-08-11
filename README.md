@@ -4,7 +4,7 @@ Production Windows photo booth for attendant-operated one-, two-, or three-photo
 
 ## Install
 
-Run `dist\Camera-Booth-Setup-0.21.1.exe`. The installer includes the x64 .NET camera bridge, Canon runtime DLLs, bundled layout-preview photographs, and the session-video encoder, so an event operator does not install either SDK separately.
+Run `dist\Camera-Booth-Setup-0.21.2.exe`. The installer includes the x64 .NET camera bridge, Canon runtime DLLs, bundled layout-preview photographs, and the session-video encoder, so an event operator does not install either SDK separately.
 
 Before opening Camera Booth:
 
@@ -95,7 +95,7 @@ Printing uses Electron's Windows printing API and the installed printer driver. 
 
 ## Optional cloud contract
 
-Cloud sharing is disabled by default and the booth continues to capture and print offline. When sharing is enabled, the configured service receives the event and session identifiers and returns short-lived presigned upload URLs plus a controlled gallery URL. Permanent AWS credentials are never stored in the desktop app. Successfully uploaded file paths are committed individually, making retries idempotent after a restart.
+Cloud sharing can be selected in New Event setup but remains disabled by default, and the booth continues to capture and print offline. The toggle saves the event preference; photos stay local until a sharing service is configured. When connected, the service receives the event and session identifiers and returns short-lived presigned upload URLs plus a controlled gallery URL. Permanent AWS credentials are never stored in the desktop app. Successfully uploaded file paths are committed individually, making retries idempotent after a restart.
 
 ## Event release checklist
 
