@@ -1,5 +1,18 @@
 import { app, dialog, ipcMain, net, protocol } from 'electron';
-import { mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, statfs } from 'node:fs/promises';
+import {
+  appendFile,
+  mkdir,
+  mkdtemp,
+  open,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  stat,
+  statfs,
+  writeFile,
+} from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import ffmpegStaticPath from 'ffmpeg-static';
 import path from 'node:path';
@@ -40,6 +53,45 @@ const validateMp4 = async (file: string) => {
     await handle.close();
   }
 };
+
+const transcodeBrowserVideo = async (ffmpegPath: string, inputPath: string, outputPath: string) =>
+  new Promise<void>((resolve, reject) => {
+    const child = spawn(
+      ffmpegPath,
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-y',
+        '-i',
+        inputPath,
+        '-map',
+        '0:v:0',
+        '-an',
+        '-c:v',
+        'libx264',
+        '-preset',
+        'veryfast',
+        '-crf',
+        '23',
+        '-pix_fmt',
+        'yuv420p',
+        '-movflags',
+        '+faststart',
+        outputPath,
+      ],
+      { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] },
+    );
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      stderr = `${stderr}${String(chunk)}`.slice(-8_000);
+    });
+    child.once('error', (error) => reject(new Error(`Could not start the video encoder: ${error.message}`)));
+    child.once('exit', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(stderr.trim() || `Video encoder exited with code ${code ?? 'unknown'}`));
+    });
+  });
 
 const bundledFfmpegPath = () => {
   if (!ffmpegStaticPath) throw new Error('The bundled FFmpeg encoder is unavailable');
@@ -406,6 +458,145 @@ export function registerIpcHandlers(owner: () => BrowserWindow | null, logger = 
       });
       logger.warn('Session video could not be finalized; photos were preserved', { sessionId: id, message });
     }
+    return sessions.view(config, metadata);
+  });
+  channel('session:startExternalVideo', async (id: string, mimeType: string, startedAt: string) => {
+    const config = await events.load();
+    let metadata = await sessions.get(config, id);
+    if (!metadata.videoEnabled || metadata.test || metadata.videoStatus === 'ready') {
+      return sessions.view(config, metadata);
+    }
+    if (metadata.videoSource !== 'windows-camera')
+      throw new Error('This session is not configured for a Windows camera');
+    if (!mimeType.toLowerCase().startsWith('video/webm')) throw new Error('Windows camera recording must use WebM');
+    const parsedStartedAt = Date.parse(startedAt);
+    if (!Number.isFinite(parsedStartedAt)) throw new Error('Windows camera returned an invalid start time');
+    const partial = sessions.temporaryExternalVideoPath(config, id);
+    await rm(partial, { force: true });
+    await rm(sessions.temporaryVideoPath(config, id), { force: true });
+    await writeFile(partial, new Uint8Array());
+    metadata = await sessions.update(config, id, (current) => {
+      current.videoStatus = 'recording';
+      current.videoStartedAt = new Date(parsedStartedAt).toISOString();
+      current.videoEndedAt = undefined;
+      current.videoPath = undefined;
+      current.videoFrameCount = undefined;
+      current.videoDroppedFrames = undefined;
+      current.videoTimelineFramesPerSecond = undefined;
+      current.videoDurationMs = undefined;
+      current.videoMarkers = [];
+      return current;
+    });
+    logger.info('Windows camera session video started', {
+      sessionId: id,
+      source: metadata.videoSourceName || 'Windows camera',
+      mimeType: mimeType.slice(0, 120),
+    });
+    return sessions.view(config, metadata);
+  });
+  channel('session:appendExternalVideo', async (id: string, chunk: ArrayBuffer) => {
+    const config = await events.load();
+    const metadata = await sessions.get(config, id);
+    if (metadata.videoStatus !== 'recording' || metadata.videoSource !== 'windows-camera') {
+      throw new Error('Windows camera recording is not active');
+    }
+    if (!(chunk instanceof ArrayBuffer) || chunk.byteLength < 1 || chunk.byteLength > 16 * 1024 * 1024) {
+      throw new Error('Windows camera returned an invalid video chunk');
+    }
+    await appendFile(sessions.temporaryExternalVideoPath(config, id), Buffer.from(chunk));
+  });
+  channel('session:stopExternalVideo', async (id: string, endedAt: string) => {
+    const config = await events.load();
+    let metadata = await sessions.get(config, id);
+    if (metadata.videoStatus !== 'recording' || metadata.videoSource !== 'windows-camera') {
+      return sessions.view(config, metadata);
+    }
+    metadata = await sessions.update(config, id, (current) => {
+      current.videoStatus = 'processing';
+      return current;
+    });
+    const externalPartial = sessions.temporaryExternalVideoPath(config, id);
+    const mp4Partial = sessions.temporaryVideoPath(config, id);
+    try {
+      if ((await stat(externalPartial)).size < 64) throw new Error('Windows camera recording is empty');
+      await rm(mp4Partial, { force: true });
+      await transcodeBrowserVideo(bundledFfmpegPath(), externalPartial, mp4Partial);
+      await validateMp4(mp4Partial);
+      const parsedEndedAt = Date.parse(endedAt);
+      const safeEndedAt = Number.isFinite(parsedEndedAt) ? parsedEndedAt : Date.now();
+      const startedAt = Date.parse(metadata.videoStartedAt || '');
+      const durationMs = Math.max(1, safeEndedAt - (Number.isFinite(startedAt) ? startedAt : safeEndedAt - 1));
+      const output = sessions.videoPath(config, id, metadata.videoMarkers);
+      await rm(output, { force: true });
+      await rename(mp4Partial, output);
+      await rm(externalPartial, { force: true });
+      metadata = await sessions.update(config, id, (current) => {
+        current.videoStatus = 'ready';
+        current.videoPath = output;
+        current.videoEndedAt = new Date(safeEndedAt).toISOString();
+        current.videoFrameCount = undefined;
+        current.videoDroppedFrames = undefined;
+        current.videoTimelineFramesPerSecond = 30;
+        current.videoDurationMs = durationMs;
+        return current;
+      });
+      logger.info('Windows camera session video finalized', {
+        sessionId: id,
+        source: metadata.videoSourceName || 'Windows camera',
+        durationMs,
+      });
+      void scheduleRecap(config, id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const interrupted = sessions.interruptedExternalVideoPath(config, id);
+      try {
+        if ((await stat(externalPartial)).size > 0) {
+          await rm(interrupted, { force: true });
+          await rename(externalPartial, interrupted);
+        }
+      } catch {
+        // The camera may not have produced a recoverable partial recording.
+      }
+      await rm(mp4Partial, { force: true });
+      metadata = await sessions.update(config, id, (current) => {
+        current.videoStatus = 'failed';
+        current.recapStatus = 'failed';
+        current.videoEndedAt = new Date().toISOString();
+        current.errors.push({ at: new Date().toISOString(), step: 'video-stop', message });
+        return current;
+      });
+      logger.warn('Windows camera video could not be finalized; photos were preserved', { sessionId: id, message });
+    }
+    return sessions.view(config, metadata);
+  });
+  channel('session:failVideo', async (id: string, input: string) => {
+    const config = await events.load();
+    const message = input.trim().slice(0, 1_000) || 'Session video failed';
+    const existing = await sessions.get(config, id);
+    if (existing.videoSource === 'windows-camera') {
+      const partial = sessions.temporaryExternalVideoPath(config, id);
+      try {
+        if ((await stat(partial)).size > 0) {
+          const interrupted = sessions.interruptedExternalVideoPath(config, id);
+          await rm(interrupted, { force: true });
+          await rename(partial, interrupted);
+        } else {
+          await rm(partial, { force: true });
+        }
+      } catch {
+        // A camera permission or startup failure may occur before a partial file exists.
+      }
+      await rm(sessions.temporaryVideoPath(config, id), { force: true });
+    }
+    const metadata = await sessions.update(config, id, (current) => {
+      if (!current.videoEnabled || current.videoStatus === 'ready') return current;
+      current.videoStatus = 'failed';
+      current.recapStatus = 'failed';
+      current.videoEndedAt = new Date().toISOString();
+      current.errors.push({ at: new Date().toISOString(), step: 'video', message });
+      return current;
+    });
+    logger.warn('Session video failed; photos will continue', { sessionId: id, message });
     return sessions.view(config, metadata);
   });
   channel('session:retryRecap', async (id: string) => {

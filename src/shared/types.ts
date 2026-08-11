@@ -12,6 +12,7 @@ export type AppState =
 
 export type LayoutPresetId = 'side-rail-one-landscape' | 'center-rail-two-stack' | 'side-rail-three-stack';
 export type PhotoCount = 1 | 2 | 3;
+export type SessionVideoSource = 'canon-live-view' | 'windows-camera';
 
 export interface RailArtworkSelection {
   assetId: string;
@@ -46,7 +47,7 @@ export type LayoutConfig =
   SideRailOneLandscapeLayoutConfig | CenterRailTwoStackLayoutConfig | SideRailThreeStackLayoutConfig;
 
 export interface EventConfig {
-  schemaVersion: 9;
+  schemaVersion: 10;
   id: string;
   createdAt: string;
   eventDate: string;
@@ -58,6 +59,9 @@ export interface EventConfig {
     previewMs: number;
     mirrorLiveView: boolean;
     sessionVideoEnabled: boolean;
+    sessionVideoSource: SessionVideoSource;
+    windowsVideoDeviceId: string;
+    windowsVideoDeviceName: string;
     camera: 'canon';
   };
   layout: LayoutConfig;
@@ -129,7 +133,7 @@ interface SessionVideoMarker {
 }
 
 export interface SessionMetadata {
-  schemaVersion: 6;
+  schemaVersion: 7;
   id: string;
   eventId: string;
   createdAt: string;
@@ -147,6 +151,8 @@ export interface SessionMetadata {
   remoteSessionId?: string;
   qrUrl?: string;
   videoEnabled: boolean;
+  videoSource: SessionVideoSource;
+  videoSourceName?: string;
   videoStatus: SessionVideoStatus;
   videoPath?: string;
   videoStartedAt?: string;
@@ -220,6 +226,10 @@ export interface BoothApi {
     get(id: string): Promise<SessionView>;
     startVideo(id: string): Promise<SessionView>;
     stopVideo(id: string): Promise<SessionView>;
+    startExternalVideo(id: string, mimeType: string, startedAt: string): Promise<SessionView>;
+    appendExternalVideo(id: string, chunk: ArrayBuffer): Promise<void>;
+    stopExternalVideo(id: string, endedAt: string): Promise<SessionView>;
+    failVideo(id: string, message: string): Promise<SessionView>;
     retryRecap(id: string): Promise<SessionView>;
     render(id: string): Promise<SessionView>;
     recent(): Promise<SessionSummary[]>;

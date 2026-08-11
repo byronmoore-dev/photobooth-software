@@ -30,8 +30,6 @@ if (!app.requestSingleInstanceLock()) {
       logger.error('Uncaught main-process exception', error.stack ?? error.message),
     );
     process.on('unhandledRejection', (reason) => logger.error('Unhandled main-process rejection', String(reason)));
-    session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
-
     mainWindow = new BrowserWindow({
       width: 1440,
       height: 960,
@@ -47,6 +45,18 @@ if (!app.requestSingleInstanceLock()) {
         sandbox: true,
         webSecurity: true,
       },
+    });
+    session.defaultSession.setPermissionCheckHandler((webContents, permission, _origin, details) =>
+      Boolean(webContents === mainWindow?.webContents && permission === 'media' && details.mediaType === 'video'),
+    );
+    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+      const mediaTypes = 'mediaTypes' in details ? details.mediaTypes : undefined;
+      callback(
+        webContents === mainWindow?.webContents &&
+          permission === 'media' &&
+          mediaTypes?.length === 1 &&
+          mediaTypes[0] === 'video',
+      );
     });
     mainWindow.setMenu(null);
     mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));

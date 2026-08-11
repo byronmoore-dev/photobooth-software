@@ -21,7 +21,13 @@ describe('event configuration', () => {
     expect(defaults.description).toBe('');
     expect(defaults.eventDate).toBe('');
     expect(defaults.railArtworkCache).toEqual({});
-    expect(defaults.capture).toMatchObject({ countdownSeconds: 8, previewMs: 2000, sessionVideoEnabled: false });
+    expect(defaults.capture).toMatchObject({
+      countdownSeconds: 8,
+      previewMs: 2000,
+      sessionVideoEnabled: false,
+      sessionVideoSource: 'canon-live-view',
+      windowsVideoDeviceId: '',
+    });
     expect(defaults.capture).not.toHaveProperty('transitionMs');
     expect(defaults.layout).not.toHaveProperty('text');
     expect(defaults.layout).not.toHaveProperty('detail');
@@ -69,7 +75,7 @@ describe('event configuration', () => {
       },
       'C:\\Events',
     );
-    expect(migrated.schemaVersion).toBe(9);
+    expect(migrated.schemaVersion).toBe(10);
     expect(migrated.createdAt).toBe('');
     expect(migrated.eventDate).toBe('');
     expect(migrated.layout).toMatchObject({
@@ -101,7 +107,7 @@ describe('event configuration', () => {
       'C:\\Events',
     );
 
-    expect(normalized.schemaVersion).toBe(9);
+    expect(normalized.schemaVersion).toBe(10);
     expect(normalized.railArtworkCache).toEqual({
       'center-rail-two-stack': { assetId: secondAsset, name: 'pair.png' },
       'side-rail-three-stack': { assetId: firstAsset, name: 'trio.png' },
@@ -160,10 +166,11 @@ describe('event configuration', () => {
       ],
     });
 
-    expect(migrated.schemaVersion).toBe(6);
+    expect(migrated.schemaVersion).toBe(7);
     expect(migrated.photoCount).toBe(3);
     expect(migrated.layout.preset).toBe('side-rail-three-stack');
     expect(migrated.videoStatus).toBe('recording');
+    expect(migrated.videoSource).toBe('canon-live-view');
     expect(migrated.recapStatus).toBe('pending');
     expect(migrated.recapVersion).toBe(0);
     expect(migrated.videoMarkers).toEqual([{ index: 0, capturedAt: '2026-08-09T12:00:00.000Z', offsetMs: 1200 }]);
@@ -178,10 +185,33 @@ describe('event configuration', () => {
       recapPath: 'C:\\Events\\session-recap.mp4',
     });
     expect(priorRecap).toMatchObject({
-      schemaVersion: 6,
+      schemaVersion: 7,
       videoTimelineFramesPerSecond: 20,
       videoDurationMs: 32_550,
       recapVersion: 1,
+    });
+  });
+
+  it('preserves a selected Windows session-video feed', () => {
+    const normalized = normalizeEventConfig(
+      {
+        ...createDefaultConfig('C:\\Events'),
+        capture: {
+          ...createDefaultConfig('').capture,
+          sessionVideoEnabled: true,
+          sessionVideoSource: 'windows-camera',
+          windowsVideoDeviceId: 'surface-camera-device',
+          windowsVideoDeviceName: 'Surface Rear Camera',
+        },
+      },
+      'C:\\Events',
+    );
+
+    expect(normalized.capture).toMatchObject({
+      sessionVideoEnabled: true,
+      sessionVideoSource: 'windows-camera',
+      windowsVideoDeviceId: 'surface-camera-device',
+      windowsVideoDeviceName: 'Surface Rear Camera',
     });
   });
 

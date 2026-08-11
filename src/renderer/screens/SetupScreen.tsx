@@ -14,6 +14,7 @@ import type {
 } from '@shared/types';
 import { PrintQuantity } from '../components/PrintQuantity';
 import { TouchDatePicker } from '../components/TouchDatePicker';
+import { createWindowsCameraStream, discoverWindowsCameras, type WindowsCameraDevice } from '../video/windowsCamera';
 
 const tabs = [
   'Set Up',
@@ -297,6 +298,47 @@ function PrinterChoice({
   );
 }
 
+function VideoSourceChoice({
+  title,
+  detail,
+  selected,
+  accent = false,
+  onSelect,
+}: {
+  title: string;
+  detail: string;
+  selected: boolean;
+  accent?: boolean;
+  onSelect(): void;
+}) {
+  return (
+    <button
+      className={`relative min-h-28 overflow-hidden rounded-[1.35rem] px-5 py-4 text-left transition-[background-color,transform,box-shadow] active:scale-[0.99] ${selected ? 'bg-[#0b1f44] text-white shadow-[inset_0_0_0_2px_#ff2f92]' : 'bg-white text-[#0b1f44] hover:bg-[#edf2f9]'}`}
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+    >
+      <span className="relative z-10">
+        <strong className="block text-base">{title}</strong>
+        <span className={`mt-2 block max-w-[85%] text-xs leading-5 ${selected ? 'text-[#b9c6d9]' : 'text-[#53657f]'}`}>
+          {detail}
+        </span>
+      </span>
+      <span
+        className={`absolute top-4 right-4 size-6 rounded-full ${selected ? 'border-[7px] border-[#ff2f92] bg-white' : 'border-2 border-[#b8c6d8]'}`}
+        aria-hidden="true"
+      />
+      {accent && selected ? (
+        <span
+          className="pointer-events-none absolute -right-8 -bottom-12 size-32 rounded-full border-[24px] border-white/[0.04]"
+          aria-hidden="true"
+        />
+      ) : null}
+    </button>
+  );
+}
+
 function PrinterQuantitySetting({ label, detail, children }: { label: string; detail: string; children: ReactNode }) {
   return (
     <div className="rounded-[1.5rem] bg-[#f4f7fc] p-5">
@@ -352,6 +394,9 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
   const [printers, setPrinters] = useState<PrinterInfo[]>([]);
   const [printerRefreshing, setPrinterRefreshing] = useState(false);
   const [printerScanError, setPrinterScanError] = useState('');
+  const [windowsCameras, setWindowsCameras] = useState<WindowsCameraDevice[]>([]);
+  const [windowsCameraError, setWindowsCameraError] = useState('');
+  const [previewingWindowsCamera, setPreviewingWindowsCamera] = useState(false);
   const [preview, setPreview] = useState<{ path: string; dataUrl: string } | null>(null);
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
@@ -374,6 +419,8 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
   const closing = useRef(false);
   const sessionCloseButton = useRef<HTMLButtonElement>(null);
   const newEventCancelButton = useRef<HTMLButtonElement>(null);
+  const windowsCameraPreview = useRef<HTMLVideoElement>(null);
+  const windowsCameraPreviewStream = useRef<MediaStream | null>(null);
   const showError = (reason: unknown) => {
     setMessageTone('error');
     setMessageTab(tab);
@@ -465,6 +512,77 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
   const patchNewEvent = <Key extends keyof EventConfig>(key: Key, value: EventConfig[Key]) => {
     setNewEventDraft((current) => (current ? { ...current, [key]: value } : current));
   };
+
+  const stopWindowsCameraPreview = () => {
+    windowsCameraPreviewStream.current?.getTracks().forEach((track) => track.stop());
+    windowsCameraPreviewStream.current = null;
+    if (windowsCameraPreview.current) windowsCameraPreview.current.srcObject = null;
+    setPreviewingWindowsCamera(false);
+  };
+
+  const scanWindowsCameras = async () => {
+    setBusy('windows-camera-scan');
+    setWindowsCameraError('');
+    stopWindowsCameraPreview();
+    try {
+      const devices = await discoverWindowsCameras();
+      setWindowsCameras(devices);
+      if (!devices.length) throw new Error('Windows did not report an available camera.');
+      setDraft((current) => {
+        if (devices.some((device) => device.deviceId === current.capture.windowsVideoDeviceId)) return current;
+        const selected = devices[0];
+        return {
+          ...current,
+          capture: {
+            ...current.capture,
+            windowsVideoDeviceId: selected.deviceId,
+            windowsVideoDeviceName: selected.label,
+          },
+        };
+      });
+    } catch (reason) {
+      setWindowsCameraError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const startWindowsCameraPreview = async () => {
+    setBusy('windows-camera-preview');
+    setWindowsCameraError('');
+    stopWindowsCameraPreview();
+    try {
+      const stream = await createWindowsCameraStream(draft.capture.windowsVideoDeviceId);
+      windowsCameraPreviewStream.current = stream;
+      if (!windowsCameraPreview.current) throw new Error('The camera preview is unavailable.');
+      windowsCameraPreview.current.srcObject = stream;
+      await windowsCameraPreview.current.play();
+      setPreviewingWindowsCamera(true);
+    } catch (reason) {
+      stopWindowsCameraPreview();
+      setWindowsCameraError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  useEffect(() => {
+    if (
+      tab === 'Capture' &&
+      draft.capture.sessionVideoEnabled &&
+      draft.capture.sessionVideoSource === 'windows-camera'
+    ) {
+      return;
+    }
+    stopWindowsCameraPreview();
+  }, [draft.capture.sessionVideoEnabled, draft.capture.sessionVideoSource, tab]);
+
+  useEffect(
+    () => () => {
+      windowsCameraPreviewStream.current?.getTracks().forEach((track) => track.stop());
+    },
+    [],
+  );
 
   const queueSave = (next: EventConfig) => {
     const snapshot = JSON.stringify(next);
@@ -1181,6 +1299,167 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                   description="Records every session from Start through the final photo"
                 />
               </div>
+              {draft.capture.sessionVideoEnabled ? (
+                <div className="mt-7 rounded-[1.75rem] bg-[#f4f7fc] p-6">
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                      <h4 className="text-lg font-semibold tracking-[-0.025em]">Recording feed</h4>
+                      <p className="mt-1 text-sm leading-6 text-[#53657f]">
+                        The Canon still takes every photograph. This selects the video source.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-[#53657f]">
+                      One feed per session
+                    </span>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 md:grid-cols-2" role="radiogroup" aria-label="Session video source">
+                    <VideoSourceChoice
+                      title="Canon live view"
+                      detail="Same angle as the photographs · 20 fps"
+                      selected={draft.capture.sessionVideoSource === 'canon-live-view'}
+                      onSelect={() => {
+                        stopWindowsCameraPreview();
+                        patch('capture', { ...draft.capture, sessionVideoSource: 'canon-live-view' });
+                      }}
+                    />
+                    <VideoSourceChoice
+                      title="Windows camera"
+                      detail={draft.capture.windowsVideoDeviceName || 'Surface or connected USB camera'}
+                      selected={draft.capture.sessionVideoSource === 'windows-camera'}
+                      accent
+                      onSelect={() => {
+                        patch('capture', { ...draft.capture, sessionVideoSource: 'windows-camera' });
+                        if (!windowsCameras.length) void scanWindowsCameras();
+                      }}
+                    />
+                  </div>
+
+                  {draft.capture.sessionVideoSource === 'windows-camera' ? (
+                    <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(18rem,0.85fr)_minmax(25rem,1.15fr)]">
+                      <div className="rounded-[1.4rem] bg-white p-4">
+                        <div className="flex items-center justify-between gap-3 px-1 pb-3">
+                          <strong className="text-sm">Windows cameras</strong>
+                          <button
+                            className="min-h-11 rounded-xl bg-[#edf2f9] px-4 text-sm font-semibold text-[#17345f] transition-colors hover:bg-[#e2eaf5] disabled:opacity-45"
+                            type="button"
+                            disabled={busy === 'windows-camera-scan'}
+                            onClick={() => void scanWindowsCameras()}
+                          >
+                            {busy === 'windows-camera-scan'
+                              ? 'Finding…'
+                              : windowsCameras.length
+                                ? 'Refresh'
+                                : 'Find cameras'}
+                          </button>
+                        </div>
+                        <div
+                          className="grid max-h-64 gap-2 overflow-y-auto overscroll-contain"
+                          role="radiogroup"
+                          aria-label="Windows camera device"
+                        >
+                          {windowsCameras.length ? (
+                            windowsCameras.map((device) => {
+                              const selected = draft.capture.windowsVideoDeviceId === device.deviceId;
+                              return (
+                                <button
+                                  key={device.deviceId}
+                                  className={`flex min-h-16 items-center justify-between gap-3 rounded-[1.1rem] px-4 text-left transition-colors ${selected ? 'bg-[#0b1f44] text-white' : 'bg-[#edf2f9] text-[#0b1f44] hover:bg-[#e2eaf5]'}`}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={selected}
+                                  onClick={() => {
+                                    stopWindowsCameraPreview();
+                                    patch('capture', {
+                                      ...draft.capture,
+                                      windowsVideoDeviceId: device.deviceId,
+                                      windowsVideoDeviceName: device.label,
+                                    });
+                                  }}
+                                >
+                                  <span className="truncate text-sm font-semibold">{device.label}</span>
+                                  <span
+                                    className={`size-5 shrink-0 rounded-full ${selected ? 'border-[6px] border-[#ff2f92] bg-white' : 'border-2 border-[#9babc0]'}`}
+                                    aria-hidden="true"
+                                  />
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <div className="grid min-h-28 place-items-center rounded-[1.1rem] bg-[#edf2f9] p-4 text-center">
+                              <span className="text-sm leading-6 text-[#53657f]">
+                                {draft.capture.windowsVideoDeviceName ||
+                                  'Find cameras to choose the Surface front or rear feed.'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="overflow-hidden rounded-[1.4rem] bg-[#07172f] p-3">
+                        <div className="relative aspect-video overflow-hidden rounded-[1rem] bg-black">
+                          <video
+                            ref={windowsCameraPreview}
+                            className={`size-full object-cover transition-opacity ${previewingWindowsCamera ? 'opacity-100' : 'opacity-0'}`}
+                            muted
+                            playsInline
+                            aria-label="Windows camera test preview"
+                          />
+                          {!previewingWindowsCamera ? (
+                            <div className="absolute inset-0 grid place-items-center p-6 text-center text-white">
+                              <div>
+                                <span
+                                  className="mx-auto grid size-14 place-items-center rounded-full bg-white/10"
+                                  aria-hidden="true"
+                                >
+                                  <svg
+                                    className="size-6"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <path d="M15 10l4.5-2.5v9L15 14M3 7h12v10H3z" />
+                                  </svg>
+                                </span>
+                                <strong className="mt-4 block text-base">Test this angle</strong>
+                                <span className="mt-1 block text-xs leading-5 text-[#9fb0c8]">
+                                  Preview only. Nothing is saved.
+                                </span>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                        <button
+                          className="mt-3 min-h-13 w-full rounded-[1rem] bg-white text-sm font-semibold text-[#0b1f44] transition-[background-color,transform] hover:bg-[#f4f7fc] active:scale-[0.99] disabled:opacity-45"
+                          type="button"
+                          disabled={busy === 'windows-camera-preview'}
+                          onClick={() =>
+                            previewingWindowsCamera ? stopWindowsCameraPreview() : void startWindowsCameraPreview()
+                          }
+                        >
+                          {busy === 'windows-camera-preview'
+                            ? 'Opening camera…'
+                            : previewingWindowsCamera
+                              ? 'Stop preview'
+                              : 'Start preview'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {windowsCameraError ? (
+                    <div
+                      className="mt-4 rounded-[1.1rem] bg-[#fff0f7] px-5 py-4 text-sm leading-6 text-[#9c245b]"
+                      role="alert"
+                    >
+                      {windowsCameraError}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </section>
           ) : null}
 
@@ -1768,6 +2047,13 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                 <time className="mt-2 block text-base text-[#53657f]" dateTime={selectedSession.createdAt}>
                   {sessionDate.format(new Date(selectedSession.createdAt))}
                 </time>
+                {selectedSession.videoEnabled ? (
+                  <span className="mt-3 inline-flex min-h-9 items-center rounded-full bg-[#e8edf6] px-4 text-xs font-semibold text-[#415a7b]">
+                    Video ·{' '}
+                    {selectedSession.videoSourceName ||
+                      (selectedSession.videoSource === 'windows-camera' ? 'Windows camera' : 'Canon live view')}
+                  </span>
+                ) : null}
                 {selectedSession.videoUrl || selectedSession.recapStatus !== 'disabled' ? (
                   <div className="mt-7 flex rounded-[1.25rem] bg-[#e7edf7] p-1.5" aria-label="Session media">
                     <button

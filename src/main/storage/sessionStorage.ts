@@ -36,7 +36,7 @@ export class SessionStorage {
     const now = new Date().toISOString();
     const id = `${test ? 'test-' : ''}${now.replace(/[:.]/g, '-').slice(0, 19)}-${crypto.randomUUID().slice(0, 6)}`;
     const metadata: SessionMetadata = {
-      schemaVersion: 6,
+      schemaVersion: 7,
       id,
       eventId: config.id,
       createdAt: now,
@@ -49,6 +49,11 @@ export class SessionStorage {
       uploadStatus: config.sharing.enabled && !test ? 'pending' : 'disabled',
       uploadedFiles: [],
       videoEnabled: config.capture.sessionVideoEnabled && !test,
+      videoSource: config.capture.sessionVideoSource,
+      videoSourceName:
+        config.capture.sessionVideoSource === 'windows-camera'
+          ? config.capture.windowsVideoDeviceName || 'Windows camera'
+          : 'Canon live view',
       videoStatus: config.capture.sessionVideoEnabled && !test ? 'pending' : 'disabled',
       videoMarkers: [],
       recapStatus: config.capture.sessionVideoEnabled && !test ? 'pending' : 'disabled',
@@ -85,8 +90,16 @@ export class SessionStorage {
     return path.join(this.folder(config, id), 'session-video.partial.mp4');
   }
 
+  temporaryExternalVideoPath(config: EventConfig, id: string) {
+    return path.join(this.folder(config, id), 'session-video.partial.webm');
+  }
+
   interruptedVideoPath(config: EventConfig, id: string) {
     return path.join(this.folder(config, id), 'session-video.interrupted.mp4');
+  }
+
+  interruptedExternalVideoPath(config: EventConfig, id: string) {
+    return path.join(this.folder(config, id), 'session-video.interrupted.webm');
   }
 
   recapPath(config: EventConfig, id: string, markers: SessionMetadata['videoMarkers'] = []) {
@@ -235,17 +248,24 @@ export class SessionStorage {
         }
       }
       if (['recording', 'processing'].includes(metadata.videoStatus)) {
-        const partial = this.temporaryVideoPath(config, metadata.id);
-        const interrupted = this.interruptedVideoPath(config, metadata.id);
-        try {
-          if ((await stat(partial)).size > 0) {
-            await rm(interrupted, { force: true });
-            await rename(partial, interrupted);
-          } else {
-            await rm(partial, { force: true });
+        const partials = [
+          [this.temporaryVideoPath(config, metadata.id), this.interruptedVideoPath(config, metadata.id)],
+          [
+            this.temporaryExternalVideoPath(config, metadata.id),
+            this.interruptedExternalVideoPath(config, metadata.id),
+          ],
+        ] as const;
+        for (const [partial, interrupted] of partials) {
+          try {
+            if ((await stat(partial)).size > 0) {
+              await rm(interrupted, { force: true });
+              await rename(partial, interrupted);
+            } else {
+              await rm(partial, { force: true });
+            }
+          } catch {
+            // This recording format did not leave a partial file.
           }
-        } catch {
-          // No partial recording was recoverable.
         }
         metadata.videoStatus = 'interrupted';
         metadata.videoEndedAt = new Date().toISOString();

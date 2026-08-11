@@ -144,6 +144,21 @@ describe('session storage and recovery', () => {
     await expect(storage.create(config, true)).resolves.toMatchObject({ videoEnabled: false, videoStatus: 'disabled' });
   });
 
+  it('snapshots the selected Windows recording feed into the session', async () => {
+    const { config, storage } = await fixture();
+    config.capture.sessionVideoEnabled = true;
+    config.capture.sessionVideoSource = 'windows-camera';
+    config.capture.windowsVideoDeviceName = 'Surface Rear Camera';
+
+    await expect(storage.create(config)).resolves.toMatchObject({
+      schemaVersion: 7,
+      videoEnabled: true,
+      videoSource: 'windows-camera',
+      videoSourceName: 'Surface Rear Camera',
+      videoStatus: 'pending',
+    });
+  });
+
   it('quarantines an interrupted partial video while preserving session metadata', async () => {
     const { config, storage } = await fixture();
     config.capture.sessionVideoEnabled = true;
@@ -162,6 +177,25 @@ describe('session storage and recovery', () => {
     expect(recovered.errors).toEqual(expect.arrayContaining([expect.objectContaining({ step: 'video-recovery' })]));
     await expect(access(storage.interruptedVideoPath(config, session.id))).resolves.toBeUndefined();
     await expect(access(storage.temporaryVideoPath(config, session.id))).rejects.toThrow();
+  });
+
+  it('quarantines an interrupted Windows camera recording', async () => {
+    const { config, storage } = await fixture();
+    config.capture.sessionVideoEnabled = true;
+    config.capture.sessionVideoSource = 'windows-camera';
+    const session = await storage.create(config);
+    session.videoStatus = 'recording';
+    session.videoStartedAt = new Date().toISOString();
+    await writeFile(storage.temporaryExternalVideoPath(config, session.id), Buffer.alloc(128, 1));
+    await storage.save(config, session);
+
+    await storage.recover(config, validateJpeg, async () => {
+      throw new Error('should not render');
+    });
+
+    await expect(storage.get(config, session.id)).resolves.toMatchObject({ videoStatus: 'interrupted' });
+    await expect(access(storage.interruptedExternalVideoPath(config, session.id))).resolves.toBeUndefined();
+    await expect(access(storage.temporaryExternalVideoPath(config, session.id))).rejects.toThrow();
   });
 
   it('exposes a stream URL only for an existing ready video', async () => {

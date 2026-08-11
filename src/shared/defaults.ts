@@ -1,4 +1,11 @@
-import type { EventConfig, LayoutConfig, LayoutPresetId, RailArtworkCache, SessionMetadata } from './types';
+import type {
+  EventConfig,
+  LayoutConfig,
+  LayoutPresetId,
+  RailArtworkCache,
+  SessionMetadata,
+  SessionVideoSource,
+} from './types';
 import { DEFAULT_LAYOUT_PRESET, getLayoutPreset, LAYOUT_PRESETS } from './layoutPresets';
 
 const record = (value: unknown): Record<string, unknown> =>
@@ -28,7 +35,7 @@ const validDateInput = (value: unknown) => {
 };
 
 export const createDefaultConfig = (baseFolder: string): EventConfig => ({
-  schemaVersion: 9,
+  schemaVersion: 10,
   id: '',
   createdAt: '',
   eventDate: '',
@@ -40,6 +47,9 @@ export const createDefaultConfig = (baseFolder: string): EventConfig => ({
     previewMs: 2000,
     mirrorLiveView: true,
     sessionVideoEnabled: false,
+    sessionVideoSource: 'canon-live-view',
+    windowsVideoDeviceId: '',
+    windowsVideoDeviceName: '',
     camera: 'canon',
   },
   layout: {
@@ -133,7 +143,7 @@ export const normalizeEventConfig = (value: unknown, baseFolder: string): EventC
       : ''
     : storedCreatedAt;
   return {
-    schemaVersion: 9,
+    schemaVersion: 10,
     id,
     createdAt,
     eventDate: storedEventDate,
@@ -151,6 +161,12 @@ export const normalizeEventConfig = (value: unknown, baseFolder: string): EventC
           : Math.round(number(capture.previewMs, defaults.capture.previewMs, 250, 10000)),
       mirrorLiveView: bool(capture.mirrorLiveView, defaults.capture.mirrorLiveView),
       sessionVideoEnabled: bool(capture.sessionVideoEnabled, defaults.capture.sessionVideoEnabled),
+      sessionVideoSource:
+        text(capture.sessionVideoSource) === 'windows-camera'
+          ? 'windows-camera'
+          : ('canon-live-view' as SessionVideoSource),
+      windowsVideoDeviceId: text(capture.windowsVideoDeviceId).trim().slice(0, 1024),
+      windowsVideoDeviceName: text(capture.windowsVideoDeviceName).trim().slice(0, 260),
       camera: 'canon',
     },
     layout,
@@ -186,7 +202,7 @@ export const normalizeSessionMetadata = (value: unknown): SessionMetadata => {
   const recapStatus = text(source.recapStatus);
   const videoEnabled = bool(source.videoEnabled, false);
   return {
-    schemaVersion: 6,
+    schemaVersion: 7,
     id: text(source.id),
     eventId: text(source.eventId),
     createdAt,
@@ -208,6 +224,8 @@ export const normalizeSessionMetadata = (value: unknown): SessionMetadata => {
     remoteSessionId: text(source.remoteSessionId) || undefined,
     qrUrl: text(source.qrUrl) || undefined,
     videoEnabled,
+    videoSource: text(source.videoSource) === 'windows-camera' ? 'windows-camera' : 'canon-live-view',
+    videoSourceName: text(source.videoSourceName).trim().slice(0, 260) || undefined,
     videoStatus: videoStatuses.has(videoStatus)
       ? (videoStatus as SessionMetadata['videoStatus'])
       : bool(source.videoEnabled, false)

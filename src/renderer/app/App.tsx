@@ -7,6 +7,7 @@ import { ResultScreen } from '../screens/ResultScreen';
 import { SetupScreen } from '../screens/SetupScreen';
 import { captureErrorMessage, isRecoverableFlashError } from './captureErrors';
 import { findTouchKeyboardTarget } from './touchKeyboard';
+import { windowsCameraRecorder } from '../video/windowsCamera';
 
 const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const AUTOFOCUS_LEAD_MS = 500;
@@ -154,10 +155,28 @@ export function App() {
     setError('');
     setPhotos([]);
     let current: SessionView | null = null;
+    const startSessionVideo = async (view: SessionView) => {
+      if (!view.videoEnabled || view.videoSource !== 'windows-camera') return window.booth.session.startVideo(view.id);
+      try {
+        return await windowsCameraRecorder.start(view.id, config.capture.windowsVideoDeviceId);
+      } catch (reason) {
+        const message = reason instanceof Error ? reason.message : String(reason);
+        return window.booth.session.failVideo(view.id, message);
+      }
+    };
+    const stopSessionVideo = async (view: SessionView) => {
+      if (view.videoSource !== 'windows-camera') return window.booth.session.stopVideo(view.id);
+      try {
+        return await windowsCameraRecorder.stop(view.id);
+      } catch (reason) {
+        const message = reason instanceof Error ? reason.message : String(reason);
+        return window.booth.session.failVideo(view.id, message);
+      }
+    };
     try {
       current = await window.booth.session.create(false);
       setSession(current);
-      current = await window.booth.session.startVideo(current.id);
+      current = await startSessionVideo(current);
       setSession(current);
       for (let index = 0; index < photoCount; index++) {
         let photo: CapturedPhoto | null = null;
@@ -197,7 +216,7 @@ export function App() {
         setFrame(photo.dataUrl);
         setState('PHOTO_PREVIEW');
         if (index === photoCount - 1) {
-          const video = window.booth.session.stopVideo(current.id);
+          const video = stopSessionVideo(current);
           const [rendered] = await Promise.all([
             window.booth.session.render(current.id),
             wait(config.capture.previewMs),
@@ -216,7 +235,7 @@ export function App() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
       setState('ERROR');
-      if (current) await window.booth.session.stopVideo(current.id).catch(() => undefined);
+      if (current) await stopSessionVideo(current).catch(() => undefined);
       await window.booth.session.recover().catch(() => undefined);
     } finally {
       running.current = false;
