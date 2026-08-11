@@ -825,6 +825,14 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                         )
                       }
                     />
+                    <Toggle
+                      checked={newEventDraft.capture.sessionVideoEnabled}
+                      onChange={(sessionVideoEnabled) =>
+                        patchNewEvent('capture', { ...newEventDraft.capture, sessionVideoEnabled })
+                      }
+                      label="Enable recording"
+                      description="Record each session and create its recap video"
+                    />
                   </div>
                 </div>
                 <div className="mt-10 flex items-center gap-4">
@@ -1034,8 +1042,8 @@ export function SetupScreen({ config, onPersist, onCreate, onClose }: SetupScree
                 <Toggle
                   checked={draft.capture.sessionVideoEnabled}
                   onChange={(sessionVideoEnabled) => patch('capture', { ...draft.capture, sessionVideoEnabled })}
-                  label="Record each session"
-                  description="Saves a silent video from Start through the final photo"
+                  label="Enable recording"
+                  description="Records every session from Start through the final photo"
                 />
               </div>
             </section>

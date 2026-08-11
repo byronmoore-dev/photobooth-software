@@ -4,7 +4,7 @@ Production Windows photo booth for attendant-operated one-, two-, or three-photo
 
 ## Install
 
-Run `dist\Camera-Booth-Setup-0.21.0.exe`. The installer includes the x64 .NET camera bridge, Canon runtime DLLs, bundled layout-preview photographs, and the session-video encoder, so an event operator does not install either SDK separately.
+Run `dist\Camera-Booth-Setup-0.21.1.exe`. The installer includes the x64 .NET camera bridge, Canon runtime DLLs, bundled layout-preview photographs, and the session-video encoder, so an event operator does not install either SDK separately.
 
 Before opening Camera Booth:
 
@@ -23,7 +23,7 @@ In guest mode, attendant Settings has no visible icon. Tap the invisible 96-pixe
 
 Finished strips appear as a visual grid under **Settings → Sessions**. Select a strip, choose the number of copies, and reprint without finding files in Windows Explorer.
 
-Silent session video is opt-in under **Settings → Capture → Record each session**. When enabled, the app records the Canon live view from Start through the final verified photo, including countdowns and flash retries. Full-resolution flash JPEG capture remains unchanged and always takes priority. The encoder consumes a bounded frame queue, so slow encoding drops video frames instead of delaying the camera. Each shutter time is encoded into the raw-video and recap filenames as a video-relative millisecond offset, while `session.json` retains recovery state for the app.
+Silent session video is opt-in from the New Event form or under **Settings → Capture → Enable recording**. When enabled, the app records the Canon live view from Start through the final verified photo, including countdowns and flash retries. Full-resolution flash JPEG capture remains unchanged and always takes priority. The encoder consumes a bounded frame queue, so slow encoding drops video frames instead of delaying the camera. Each shutter time is encoded into the raw-video and recap filenames as a video-relative millisecond offset, while `session.json` retains recovery state for the app.
 
 After the printable JPEG is safely created and the print screen can appear, a below-normal-priority background queue generates one recap at a time. The vertical H.264 recap retains the entire session recording, accelerates the movement between shots, returns to real time exactly one second before each shutter, reveals each corresponding full-resolution photo, and closes on the finished branded 4 × 6 print. A typical booth session is paced to approximately 13.5 seconds. Recap failure never affects the print, originals, raw recording, or the next photo session. **Settings → Sessions** shows generation progress and provides Print, Recap, and Full video views with a manual retry when needed.
 
